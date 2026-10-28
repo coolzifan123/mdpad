@@ -5,14 +5,19 @@
 //   - Source: a plain textarea with the raw Markdown
 
 import { Crepe } from '@milkdown/crepe';
+import { editorViewCtx, remarkCtx, remarkStringifyOptionsCtx, serializerCtx } from '@milkdown/kit/core';
+import type { Node as ProseNode } from '@milkdown/kit/prose/model';
 import { upload, uploadConfig, type Uploader } from '@milkdown/kit/plugin/upload';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
+import { detectStyle } from './markdown-style';
+import { BlockPreserver, type SourceTree } from './preserve';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
 export interface EditorOptions {
   host: HTMLElement;
+  /** With "\n" line endings. */
   markdown: string;
   /** Called after the content changes. */
   onChange: () => void;
@@ -70,21 +75,46 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     );
     return nodes.filter((node) => node !== null);
   };
+  // Blocks Milkdown rewrites follow the file's own style ("-" bullets, ...).
+  const style = detectStyle(options.markdown);
   crepe.editor
-    .config((ctx) => ctx.update(uploadConfig.key, (config) => ({ ...config, uploader })))
+    .config((ctx) => {
+      ctx.update(uploadConfig.key, (config) => ({ ...config, uploader }));
+      ctx.update(remarkStringifyOptionsCtx, (current) => ({
+        ...current,
+        ...style,
+        handlers: { ...current.handlers, ...style.handlers },
+      }));
+    })
     .use(upload);
 
   let destroyed = false;
   crepe.on((events) => {
-    events.markdownUpdated(() => {
+    // `updated`, not `markdownUpdated`: that one serializes the whole
+    // document after every change, which makes typing in big files slow.
+    events.updated(() => {
       if (!destroyed) options.onChange();
     });
   });
   await crepe.create();
 
+  // Unedited blocks are saved exactly as they are in the file.
+  const ctx = crepe.editor.ctx;
+  const view = ctx.get(editorViewCtx);
+  const serializer = ctx.get(serializerCtx);
+  const serialize = (nodes: ProseNode[]) => serializer(view.state.schema.topNodeType.create(null, nodes));
+  let preserver: BlockPreserver | null = null;
+  try {
+    const remark = ctx.get(remarkCtx);
+    const tree = remark.runSync(remark.parse(options.markdown), options.markdown) as unknown as SourceTree;
+    preserver = BlockPreserver.create(options.markdown, tree, view.state.doc, serialize);
+  } catch (error) {
+    console.warn('Saving will rewrite the whole file:', error);
+  }
+
   return {
     mode: 'wysiwyg',
-    getMarkdown: () => crepe.getMarkdown(),
+    getMarkdown: () => (preserver ? preserver.markdown(view.state.doc) : crepe.getMarkdown()),
     focus: () => root.querySelector<HTMLElement>('.ProseMirror')?.focus(),
     destroy: async () => {
       destroyed = true;

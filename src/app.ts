@@ -3,6 +3,7 @@
 
 import { createEditor, type EditorMode, type MarkdownEditor } from './editor';
 import { isReloadKey, keymap, shortcutFor } from './keymap';
+import { detectLineEnding, toLf, withLineEnding, type LineEnding } from './markdown-style';
 import * as platform from './platform';
 import { toggleTheme } from './theme';
 import { countText } from './wordcount';
@@ -16,6 +17,8 @@ interface DocumentState {
   name: string;
   /** Exact text last read from or written to disk. */
   savedText: string;
+  /** The editor always uses "\n"; files are saved with their own line endings. */
+  lineEnding: LineEnding;
   dirty: boolean;
 }
 
@@ -29,7 +32,13 @@ export interface AppElements {
 }
 
 export class App {
-  private doc: DocumentState = { path: null, name: UNTITLED, savedText: '', dirty: false };
+  private doc: DocumentState = {
+    path: null,
+    name: UNTITLED,
+    savedText: '',
+    lineEnding: detectLineEnding(''),
+    dirty: false,
+  };
   private editor: MarkdownEditor | null = null;
   private mode: EditorMode = 'wysiwyg';
   /**
@@ -99,15 +108,19 @@ export class App {
   /** Resolves true if the document was saved. */
   private async save(saveAs: boolean): Promise<boolean> {
     if (!this.editor) return false;
-    // Nothing changed: don't rewrite the file (Milkdown could reformat it).
+    // The editor reports changes a moment late; don't miss the latest ones.
+    this.refreshDirty();
+    // Nothing changed: don't rewrite the file.
     if (!saveAs && this.doc.path && !this.doc.dirty) return true;
 
-    const text = this.doc.dirty ? this.editor.getMarkdown() : this.doc.savedText;
+    const markdown = this.doc.dirty ? this.editor.getMarkdown() : null;
+    const { lineEnding } = this.doc;
+    const text = markdown === null ? this.doc.savedText : withLineEnding(markdown, lineEnding);
     const written = await platform.writeFile(saveAs ? null : this.doc.path, this.doc.name, text);
     if (!written) return false;
 
-    if (this.doc.dirty) this.cleanSnapshot = text;
-    this.doc = { path: written.path, name: written.name, savedText: text, dirty: false };
+    if (markdown !== null) this.cleanSnapshot = markdown;
+    this.doc = { path: written.path, name: written.name, savedText: text, lineEnding, dirty: false };
     this.updateUi();
     return true;
   }
@@ -117,7 +130,7 @@ export class App {
     // Source mode shows the exact file content when nothing has changed.
     const markdown =
       this.editor.mode === 'wysiwyg' && !this.doc.dirty
-        ? this.doc.savedText
+        ? toLf(this.doc.savedText)
         : this.editor.getMarkdown();
     this.mode = this.mode === 'wysiwyg' ? 'source' : 'wysiwyg';
     await this.mountEditor(markdown);
@@ -127,8 +140,14 @@ export class App {
   // Document lifecycle
 
   private async load(file: platform.OpenedFile): Promise<void> {
-    this.doc = { path: file.path, name: file.name, savedText: file.content, dirty: false };
-    await this.mountEditor(file.content);
+    this.doc = {
+      path: file.path,
+      name: file.name,
+      savedText: file.content,
+      lineEnding: detectLineEnding(file.content),
+      dirty: false,
+    };
+    await this.mountEditor(toLf(file.content));
   }
 
   private async mountEditor(markdown: string): Promise<void> {
@@ -144,7 +163,7 @@ export class App {
       uploadImage: (file) => platform.storeImage(file, this.doc.path),
     });
     this.editor = editor;
-    if (editor.mode === 'source') this.cleanSnapshot = this.doc.savedText;
+    if (editor.mode === 'source') this.cleanSnapshot = toLf(this.doc.savedText);
     else this.cleanSnapshot = this.doc.dirty ? null : editor.getMarkdown();
 
     this.refreshDirty();
@@ -154,6 +173,7 @@ export class App {
 
   /** Asks about unsaved changes. Resolves true if it's OK to continue. */
   private async confirmDiscardChanges(): Promise<boolean> {
+    this.refreshDirty();
     if (!this.doc.dirty) return true;
     const choice = await platform.askUnsavedChanges(this.doc.name);
     if (choice === 'save') return this.save(false);
@@ -213,7 +233,9 @@ export class App {
     // Last line of defence against anything else that would leave the page
     // with unsaved changes, such as "Refresh" in the right-click menu.
     window.addEventListener('beforeunload', (event) => {
-      if (this.doc.dirty && !this.closing) event.preventDefault();
+      if (this.closing) return;
+      this.refreshDirty();
+      if (this.doc.dirty) event.preventDefault();
     });
   }
 

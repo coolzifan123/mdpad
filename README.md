@@ -84,6 +84,8 @@ src/                     Frontend (TypeScript, runs in the webview)
   main.ts                Entry point: finds the page elements, starts the app
   app.ts                 Document state, commands (new/open/save/...), UI updates
   editor.ts              The two editors: live preview (Crepe) and source (textarea)
+  preserve.ts            Saving without reformatting: unedited blocks are copied from the file
+  markdown-style.ts      Line endings, and each file's Markdown style for rewritten blocks
   platform.ts            Files, dialogs, window title, images (Tauri + browser fallback)
   keymap.ts              Keyboard shortcuts
   theme.ts               Light/dark switching
@@ -117,10 +119,11 @@ examples/welcome.md      A sample document
 
 - Markdown markers are hidden while editing (like Notion). Typora shows them
   when the cursor is inside the formatted text; that would need a custom plugin.
-- Milkdown can reformat Markdown when saving an edited file (for example, it
-  pads table columns and writes empty paragraphs as `<br />`). Saving a file
-  you haven't changed never rewrites it, and source mode saves exactly what
-  you typed.
+- Saving keeps the parts of a file you didn't edit exactly as they were, and
+  keeps its line endings (CRLF or LF). A block you did edit is rewritten in
+  the file's own style (bullet character, `---` rules, ...), but small things
+  can still change in that block: tables get padded columns, and an empty
+  paragraph is written as `<br />`. Source mode saves exactly what you typed.
 - Math blocks show the LaTeX source above the rendered preview.
 - Only UTF-8 files can be opened.
 - Dragging a file onto the window doesn't open it yet; use `Ctrl+O`.
