@@ -21,6 +21,16 @@ A free, open-source, Typora-like Markdown editor built with
 | `Ctrl+Shift+S` | Save as            |
 | `Ctrl+/`       | Toggle source mode |
 
+## Download
+
+GitHub builds a Windows installer for every change. Open the **Actions** tab,
+click the newest **Windows build** run, and download the `.exe` under
+**Artifacts** (sign in to GitHub first). Versions tagged like `v0.1.0` are also
+published on the **Releases** page.
+
+Windows may warn that the app is from an unknown publisher, because it isn't
+code-signed yet: click **More info → Run anyway**.
+
 ## Run it on Windows
 
 **Easiest:** double-click `setup.cmd`. It installs what MdPad needs
