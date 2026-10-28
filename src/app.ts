@@ -2,7 +2,7 @@
 // that the toolbar buttons and keyboard shortcuts run.
 
 import { createEditor, type EditorMode, type MarkdownEditor } from './editor';
-import { keymap, shortcutFor } from './keymap';
+import { isReloadKey, keymap, shortcutFor } from './keymap';
 import * as platform from './platform';
 import { toggleTheme } from './theme';
 import { countText } from './wordcount';
@@ -40,6 +40,8 @@ export class App {
   private cleanSnapshot: string | null = '';
   /** Stops a second command from starting while a dialog is open. */
   private busy = false;
+  /** Set once the user has agreed to close the window. */
+  private closing = false;
 
   /** Add new commands here, then bind them in keymap.ts or index.html. */
   private readonly commands: Record<string, () => unknown> = {
@@ -181,6 +183,10 @@ export class App {
     document.addEventListener(
       'keydown',
       (event) => {
+        if (isReloadKey(event)) {
+          event.preventDefault();
+          return;
+        }
         const shortcut = shortcutFor(event);
         const command = shortcut && keymap[shortcut];
         if (command) {
@@ -192,9 +198,22 @@ export class App {
       true,
     );
 
-    platform.onCloseRequested(() => this.confirmDiscardChanges());
+    // A file dropped outside the editor would make the webview open it in
+    // place of the app. (Milkdown handles files dropped inside the editor.)
+    for (const type of ['dragover', 'drop'] as const) {
+      window.addEventListener(type, (event) => {
+        if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+      });
+    }
+
+    platform.onCloseRequested(async () => {
+      this.closing = await this.confirmDiscardChanges();
+      return this.closing;
+    });
+    // Last line of defence against anything else that would leave the page
+    // with unsaved changes, such as "Refresh" in the right-click menu.
     window.addEventListener('beforeunload', (event) => {
-      if (!platform.inTauri && this.doc.dirty) event.preventDefault();
+      if (this.doc.dirty && !this.closing) event.preventDefault();
     });
   }
 

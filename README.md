@@ -113,5 +113,6 @@ examples/welcome.md      A sample document
   you typed.
 - Math blocks show the LaTeX source above the rendered preview.
 - Only UTF-8 files can be opened.
+- Dragging a file onto the window doesn't open it yet; use `Ctrl+O`.
 - Not yet: outline sidebar, file tree, find and replace, Mermaid diagrams,
   export to PDF/HTML, file associations, auto-save.

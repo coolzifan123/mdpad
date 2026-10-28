@@ -11,6 +11,12 @@ export const keymap: Record<string, string> = {
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
+/** F5 / Ctrl+R would reload the webview and lose unsaved changes. */
+export function isReloadKey(event: KeyboardEvent): boolean {
+  const mod = isMac ? event.metaKey : event.ctrlKey;
+  return event.key === 'F5' || (mod && event.key.toLowerCase() === 'r');
+}
+
 /** Convert a KeyboardEvent to the same format as the keys above. */
 export function shortcutFor(event: KeyboardEvent): string | null {
   const mod = isMac ? event.metaKey : event.ctrlKey;
