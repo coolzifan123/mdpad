@@ -1,0 +1,89 @@
+// Native side of the app: small commands the frontend calls with `invoke`.
+// See src/platform.ts for the TypeScript side.
+
+use std::fs;
+use std::path::Path;
+
+const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
+
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+    // Windows Notepad sometimes adds a BOM; drop it.
+    let bytes = bytes.strip_prefix(UTF8_BOM).unwrap_or(&bytes);
+    String::from_utf8(bytes.to_vec()).map_err(|_| format!("{path} is not a UTF-8 text file"))
+}
+
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
+/// The file passed on the command line (e.g. "Open with" in Explorer).
+#[tauri::command]
+fn initial_file() -> Option<String> {
+    std::env::args().skip(1).find(|arg| !arg.starts_with('-'))
+}
+
+/// Copies an image into an `assets` folder next to the document and returns
+/// the relative path to use in the Markdown, e.g. `assets/image-1.png`.
+#[tauri::command]
+fn save_image(doc_path: String, file_name: String, bytes: Vec<u8>) -> Result<String, String> {
+    let folder = Path::new(&doc_path)
+        .parent()
+        .ok_or("The document has no folder")?
+        .join("assets");
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+
+    let (stem, ext) = split_file_name(&file_name);
+    let mut name = format!("{stem}.{ext}");
+    let mut n = 1;
+    while folder.join(&name).exists() {
+        name = format!("{stem}-{n}.{ext}");
+        n += 1;
+    }
+    fs::write(folder.join(&name), bytes).map_err(|e| e.to_string())?;
+    Ok(format!("assets/{name}"))
+}
+
+/// "My Photo.PNG" -> ("My-Photo", "png"). Keeps names safe for Markdown links.
+fn split_file_name(file_name: &str) -> (String, String) {
+    let path = Path::new(file_name);
+    let clean = |s: &str| -> String {
+        s.chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .collect()
+    };
+    let stem = path.file_stem().and_then(|s| s.to_str()).map(clean);
+    let ext = path.extension().and_then(|s| s.to_str()).map(|s| clean(s).to_lowercase());
+    (
+        stem.filter(|s| !s.is_empty()).unwrap_or_else(|| "image".into()),
+        ext.filter(|s| !s.is_empty()).unwrap_or_else(|| "png".into()),
+    )
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            read_text_file,
+            write_text_file,
+            initial_file,
+            save_image
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running MdPad");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_file_name;
+
+    #[test]
+    fn cleans_image_names() {
+        assert_eq!(split_file_name("My Photo.PNG"), ("My-Photo".into(), "png".into()));
+        assert_eq!(split_file_name(""), ("image".into(), "png".into()));
+        assert_eq!(split_file_name("截图 1.jpg"), ("截图-1".into(), "jpg".into()));
+    }
+}

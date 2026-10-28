@@ -1,0 +1,150 @@
+/* Layout of the app window: toolbar, editor area, status bar. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font-family: var(--app-font-ui);
+  font-size: 13px;
+}
+
+/* --- Toolbar ------------------------------------------------------------ */
+
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-chrome-bg);
+  user-select: none;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 2px;
+}
+
+.toolbar-group:last-child {
+  justify-content: flex-end;
+}
+
+.toolbar button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: var(--app-hover);
+  color: var(--app-fg);
+}
+
+.toolbar button.active {
+  background: var(--app-active);
+  color: var(--app-fg);
+}
+
+.doc-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+#doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dirty-mark {
+  color: var(--app-accent);
+  font-size: 10px;
+}
+
+/* --- Editor area -------------------------------------------------------- */
+
+#editor-host {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--app-bg);
+}
+
+.wysiwyg-root {
+  min-height: 100%;
+}
+
+.wysiwyg-root .milkdown {
+  max-width: var(--editor-max-width);
+  min-height: 100%;
+  margin: 0 auto;
+}
+
+.wysiwyg-root .milkdown .ProseMirror {
+  min-height: calc(100vh - 64px);
+  padding: 40px 72px 30vh;
+}
+
+.source-editor {
+  display: block;
+  width: 100%;
+  max-width: var(--editor-max-width);
+  height: 100%;
+  margin: 0 auto;
+  padding: 40px 72px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--app-fg);
+  font-family: var(--app-font-code);
+  font-size: 14px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+
+/* --- Status bar --------------------------------------------------------- */
+
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 12px;
+  align-items: center;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-chrome-bg);
+  color: var(--app-fg-muted);
+  font-size: 12px;
+  user-select: none;
+}
+
+@media (max-width: 700px) {
+  .wysiwyg-root .milkdown .ProseMirror,
+  .source-editor {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}

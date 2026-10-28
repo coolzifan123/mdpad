@@ -1,0 +1,67 @@
+/*
+ * Colors and fonts. Edit this file to restyle the app.
+ *
+ * --app-*    : the window chrome (toolbar, status bar, source mode)
+ * --crepe-*  : the live-preview editor (Milkdown Crepe theme variables)
+ */
+
+:root {
+  --app-font-ui: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', 'PingFang SC',
+    'Noto Sans', 'Noto Sans CJK SC', sans-serif;
+  --app-font-code: 'Cascadia Code', Consolas, 'JetBrains Mono', Menlo, 'Courier New', monospace;
+  --editor-max-width: 900px;
+
+  --app-bg: #ffffff;
+  --app-fg: #1f2328;
+  --app-fg-muted: #656d76;
+  --app-chrome-bg: #f6f8fa;
+  --app-border: #e3e6ea;
+  --app-hover: #eaeef2;
+  --app-active: #dde3ea;
+  --app-accent: #0969da;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --app-bg: #1e1e1e;
+  --app-fg: #e6e6e6;
+  --app-fg-muted: #9da5ae;
+  --app-chrome-bg: #252526;
+  --app-border: #333538;
+  --app-hover: #2f3134;
+  --app-active: #3a3d41;
+  --app-accent: #4c9aff;
+
+  color-scheme: dark;
+}
+
+/* Editor typography (applies to both themes). */
+.milkdown {
+  --crepe-font-title: var(--app-font-ui);
+  --crepe-font-default: var(--app-font-ui);
+  --crepe-font-code: var(--app-font-code);
+  --crepe-color-background: var(--app-bg);
+}
+
+/* Dark editor colors, copied from Crepe's frame-dark theme. */
+:root[data-theme='dark'] .milkdown {
+  --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #252526;
+  --crepe-color-surface-low: #2a2a2a;
+  --crepe-color-on-surface: #d1d1d1;
+  --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575;
+  --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d;
+  --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inverse: #e5e5e5;
+  --crepe-color-on-inverse: #2a2a2a;
+  --crepe-color-inline-code: #ff7b72;
+  --crepe-color-error: #ff6666;
+  --crepe-color-hover: #2f3134;
+  --crepe-color-selected: #3a3d41;
+  --crepe-color-inline-area: #2b2b2b;
+  --crepe-shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.6), 0px 1px 3px 1px rgba(0, 0, 0, 0.4);
+  --crepe-shadow-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.6), 0px 2px 6px 2px rgba(0, 0, 0, 0.4);
+}

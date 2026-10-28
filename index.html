@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MdPad</title>
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="toolbar-group">
+        <button data-command="new" title="New (Ctrl+N)">New</button>
+        <button data-command="open" title="Open (Ctrl+O)">Open</button>
+        <button data-command="save" title="Save (Ctrl+S)">Save</button>
+      </div>
+      <div class="doc-title">
+        <span id="doc-name">Untitled.md</span>
+        <span id="dirty-mark" title="Unsaved changes" hidden>●</span>
+      </div>
+      <div class="toolbar-group">
+        <button data-command="toggle-source" id="source-button" title="Source mode (Ctrl+/)">Source</button>
+        <button data-command="toggle-theme" title="Light / dark theme">Theme</button>
+      </div>
+    </header>
+    <main id="editor-host"></main>
+    <footer class="statusbar">
+      <span id="status-mode">Live preview</span>
+      <span id="status-count"></span>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
