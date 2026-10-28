@@ -12,8 +12,11 @@ import type { Node as ProseNode } from '@milkdown/kit/prose/model';
 
 /** The parts of a remark (mdast) tree we need. */
 export interface SourceTree {
-  children: { position?: { start: { offset?: number }; end: { offset?: number } } }[];
+  children: { type: string; position?: { start: { offset?: number }; end: { offset?: number } } }[];
 }
+
+/** [start, end] offsets in the file. */
+export type Range = [number, number];
 
 interface SourceBlock {
   node: ProseNode;
@@ -34,14 +37,17 @@ export class BlockPreserver {
 
   /**
    * `tree` is `source` parsed by the editor's own remark processor and `doc`
-   * the editor's document for it. Returns null when the two can't be matched
-   * block by block; the caller should then serialize the whole document.
+   * the editor's document for it. `locate` finds the blocks in a piece of
+   * Markdown, as [start, end] offsets. Returns null when the file and the
+   * document can't be matched block by block; the caller should then
+   * serialize the whole document.
    */
   static create(
     source: string,
     tree: SourceTree,
     doc: ProseNode,
     serialize: (nodes: ProseNode[]) => string,
+    locate: (markdown: string) => Range[],
   ): BlockPreserver | null {
     const sourceBlocks = tree.children;
     const nodes = children(doc);
@@ -49,20 +55,25 @@ export class BlockPreserver {
     while (nodes.length > sourceBlocks.length && isEmptyParagraph(nodes[nodes.length - 1])) nodes.pop();
     if (nodes.length !== sourceBlocks.length) return null;
 
-    const ranges = sourceBlocks.map((block) => {
+    const ranges: (Range | null)[] = sourceBlocks.map((block) => {
       const { start, end } = block.position ?? {};
       return start?.offset !== undefined && end?.offset !== undefined ? [start.offset, end.offset] : null;
     });
-    // Some blocks (math) lose their position in remark plugins. Such a block
-    // is whatever sits between its neighbours.
-    for (let i = 0; i < ranges.length; i++) {
-      if (ranges[i]) continue;
-      if (i + 1 < ranges.length && !ranges[i + 1]) return null;
+    // Some blocks (math, images) are replaced by remark plugins and lose their
+    // position. Find them in the text between their neighbours.
+    for (let i = 0; i < ranges.length; ) {
+      if (ranges[i]) {
+        i++;
+        continue;
+      }
+      let next = i;
+      while (next < ranges.length && !ranges[next]) next++;
       const from = i > 0 ? ranges[i - 1]![1] : 0;
-      const to = i + 1 < ranges.length ? ranges[i + 1]![0] : source.length;
-      const text = source.slice(from, to);
-      if (!text.trim()) return null;
-      ranges[i] = [from + text.length - text.trimStart().length, to - (text.length - text.trimEnd().length)];
+      const to = next < ranges.length ? ranges[next]![0] : source.length;
+      const found = locate(source.slice(from, to));
+      if (found.length !== next - i) return null;
+      found.forEach(([start, end], k) => (ranges[i + k] = [from + start, from + end]));
+      i = next;
     }
 
     const blocks: SourceBlock[] = [];

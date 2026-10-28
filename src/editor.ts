@@ -8,10 +8,11 @@ import { Crepe } from '@milkdown/crepe';
 import { editorViewCtx, remarkCtx, remarkStringifyOptionsCtx, serializerCtx } from '@milkdown/kit/core';
 import type { Node as ProseNode } from '@milkdown/kit/prose/model';
 import { upload, uploadConfig, type Uploader } from '@milkdown/kit/plugin/upload';
+import { $remark } from '@milkdown/kit/utils';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import { detectStyle } from './markdown-style';
-import { BlockPreserver, type SourceTree } from './preserve';
+import { BlockPreserver, type Range, type SourceTree } from './preserve';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -77,6 +78,12 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
   };
   // Blocks Milkdown rewrites follow the file's own style ("-" bullets, ...).
   const style = detectStyle(options.markdown);
+  // Milkdown parses the file into a syntax tree that knows where each block
+  // is in the file. Keep it, to save unedited blocks exactly as they were.
+  let fileTree: SourceTree | null = null;
+  const keepFileTree = $remark('keepFileTree', () => () => (tree, file) => {
+    if (!fileTree && String(file.value) === options.markdown) fileTree = tree as unknown as SourceTree;
+  });
   crepe.editor
     .config((ctx) => {
       ctx.update(uploadConfig.key, (config) => ({ ...config, uploader }));
@@ -86,7 +93,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
         handlers: { ...current.handlers, ...style.handlers },
       }));
     })
-    .use(upload);
+    .use(upload)
+    .use(keepFileTree);
 
   let destroyed = false;
   crepe.on((events) => {
@@ -103,14 +111,15 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
   const view = ctx.get(editorViewCtx);
   const serializer = ctx.get(serializerCtx);
   const serialize = (nodes: ProseNode[]) => serializer(view.state.schema.topNodeType.create(null, nodes));
-  let preserver: BlockPreserver | null = null;
-  try {
-    const remark = ctx.get(remarkCtx);
-    const tree = remark.runSync(remark.parse(options.markdown), options.markdown) as unknown as SourceTree;
-    preserver = BlockPreserver.create(options.markdown, tree, view.state.doc, serialize);
-  } catch (error) {
-    console.warn('Saving will rewrite the whole file:', error);
-  }
+  // Without it, saving falls back to rewriting the whole file.
+  // Block positions in a piece of Markdown. Link definitions are not blocks
+  // in the editor (Milkdown turns reference links into normal links).
+  const locate = (markdown: string): Range[] =>
+    (ctx.get(remarkCtx).parse(markdown) as unknown as SourceTree).children
+      .filter((block) => block.type !== 'definition')
+      .map((block) => [block.position?.start.offset ?? -1, block.position?.end.offset ?? -1]);
+  const tree = fileTree as SourceTree | null; // set by the plugin above, during create()
+  const preserver = tree && BlockPreserver.create(options.markdown, tree, view.state.doc, serialize, locate);
 
   return {
     mode: 'wysiwyg',
