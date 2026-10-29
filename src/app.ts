@@ -28,6 +28,8 @@ const VIEW_KEY = 'mdpad-view';
 interface ViewSettings {
   focus: boolean;
   typewriter: boolean;
+  /** Show "**", "##"… around the formatting at the cursor. */
+  symbols: boolean;
   /** 1 = 100% */
   zoom: number;
 }
@@ -101,6 +103,7 @@ export class App {
     'toggle-theme': () => toggleTheme(),
     'toggle-focus': () => this.setView({ focus: !this.view.focus }),
     'toggle-typewriter': () => this.setView({ typewriter: !this.view.typewriter }),
+    'toggle-symbols': () => this.setView({ symbols: !this.view.symbols }),
     'toggle-fullscreen': () => platform.toggleFullscreen(),
     'zoom-in': () => this.setView({ zoom: Math.min(3, round(this.view.zoom + 0.1)) }),
     'zoom-out': () => this.setView({ zoom: Math.max(0.5, round(this.view.zoom - 0.1)) }),
@@ -163,6 +166,7 @@ export class App {
         sidebar: this.sidebar.visible ? this.sidebar.activeTab : null,
         focusMode: this.view.focus,
         typewriter: this.view.typewriter,
+        symbols: this.view.symbols,
         themes: this.themes,
         customTheme: savedCustomTheme(),
         setCustomTheme: (name) => void this.run(() => applyCustomTheme(name, platform.readTheme)),
@@ -316,6 +320,7 @@ export class App {
     saveText(VIEW_KEY, JSON.stringify(this.view));
     document.body.classList.toggle('focus-mode', this.view.focus);
     document.body.classList.toggle('typewriter', this.view.typewriter);
+    document.body.classList.toggle('hide-symbols', !this.view.symbols);
     writingModes.typewriter = this.view.typewriter;
     if (change.typewriter) this.editor?.run('center-cursor');
     if (change.zoom !== undefined || Object.keys(change).length === 0) void platform.setZoom(this.view.zoom);
@@ -578,7 +583,7 @@ function saveText(key: string, value: string): void {
 }
 
 function loadView(): ViewSettings {
-  const defaults: ViewSettings = { focus: false, typewriter: false, zoom: 1 };
+  const defaults: ViewSettings = { focus: false, typewriter: false, symbols: true, zoom: 1 };
   try {
     return { ...defaults, ...JSON.parse(loadText(VIEW_KEY) ?? '{}') };
   } catch {

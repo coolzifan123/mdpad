@@ -31,6 +31,7 @@ import '@milkdown/crepe/theme/frame.css';
 import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 import { frontmatter } from './frontmatter';
 import { imageHandler, useImageBlocks } from './image-blocks';
+import { markersPlugin } from './markers';
 import { mermaidPreview } from './mermaid';
 import { tocPlugin } from './toc';
 import { detectStyle } from './markdown-style';
@@ -145,6 +146,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(currentBlockPlugin)
     .use(frontmatter)
     .use(tocPlugin)
+    .use(markersPlugin)
     // Code blocks in "mermaid" show the diagram (math blocks already show
     // their formula this way).
     .config((ctx) =>

@@ -13,6 +13,7 @@ export interface MenuState {
   sidebar: 'files' | 'outline' | null;
   focusMode: boolean;
   typewriter: boolean;
+  symbols: boolean;
   /** Custom theme files, and the one in use. */
   themes: string[];
   customTheme: string | null;
@@ -125,7 +126,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
     {
       label: 'View',
       items: () => {
-        const { sourceMode, darkTheme, sidebar, focusMode, typewriter, themes, customTheme, setCustomTheme } = state();
+        const { sourceMode, darkTheme, sidebar, focusMode, typewriter, symbols, themes, customTheme, setCustomTheme } = state();
         const themeItems: MenuEntry[] = [
           { label: 'Default', checked: !customTheme, action: () => setCustomTheme(null) },
           ...themes.map((name) => ({
@@ -140,6 +141,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
           { label: 'Source Mode', command: 'toggle-source', checked: sourceMode },
           { label: 'Focus Mode', command: 'toggle-focus', checked: focusMode },
           { label: 'Typewriter Mode', command: 'toggle-typewriter', checked: typewriter },
+          { label: 'Markdown Symbols at Cursor', command: 'toggle-symbols', checked: symbols },
           'separator',
           { label: 'Sidebar', command: 'toggle-sidebar', checked: sidebar !== null },
           { label: 'Outline', command: 'show-outline', checked: sidebar === 'outline' },

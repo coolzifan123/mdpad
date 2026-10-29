@@ -557,6 +557,49 @@ body {
   white-space: pre-wrap;
 }
 
+.milkdown .ProseMirror pre.front-matter code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+/* Footnotes: "1  The note." on one line, smaller. */
+.milkdown .ProseMirror dl[data-type='footnote_definition'] {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--app-fg-muted);
+  font-size: 0.9em;
+}
+
+.milkdown .ProseMirror dl[data-type='footnote_definition'] dt::after {
+  content: '.';
+}
+
+.milkdown .ProseMirror dl[data-type='footnote_definition'] dd {
+  margin: 0;
+}
+
+.milkdown .ProseMirror dl[data-type='footnote_definition'] dd p {
+  margin: 0;
+}
+
+/* "**", "##"… shown around the formatting at the cursor (markers.ts). */
+.milkdown .ProseMirror .md-symbol {
+  color: var(--app-fg-muted);
+  font-family: var(--app-font-code);
+  font-size: 0.85em;
+  font-style: normal;
+  font-weight: normal;
+  opacity: 0.75;
+  user-select: none;
+}
+
+body.hide-symbols .md-symbol {
+  display: none;
+}
+
 /* [TOC] */
 .milkdown .ProseMirror .toc-marker {
   color: var(--app-fg-muted);
