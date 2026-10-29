@@ -3,6 +3,7 @@
 
 use std::fs;
 use std::path::Path;
+use tauri::Manager;
 
 const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
 
@@ -89,6 +90,40 @@ fn find_markdown_files(root: String, limit: usize) -> Vec<String> {
     found
 }
 
+/// The folder for custom CSS themes, created if missing.
+fn theme_folder(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let folder = app.path().app_config_dir().map_err(|e| e.to_string())?.join("themes");
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    Ok(folder)
+}
+
+#[tauri::command]
+fn theme_folder_path(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(theme_folder(&app)?.to_string_lossy().into_owned())
+}
+
+/// The names of the .css files in the theme folder.
+#[tauri::command]
+fn list_themes(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let mut names: Vec<String> = fs::read_dir(theme_folder(&app)?)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.to_lowercase().ends_with(".css"))
+        .collect();
+    names.sort_by_key(|name| name.to_lowercase());
+    Ok(names)
+}
+
+#[tauri::command]
+fn read_theme(app: tauri::AppHandle, name: String) -> Result<String, String> {
+    // Only files directly inside the theme folder.
+    if name.contains(['/', '\\']) || name.contains("..") {
+        return Err(format!("Not a theme name: {name}"));
+    }
+    fs::read_to_string(theme_folder(&app)?.join(name)).map_err(|e| e.to_string())
+}
+
 fn is_markdown(name: &str) -> bool {
     let name = name.to_lowercase();
     [".md", ".markdown", ".mdown", ".mkd", ".txt"]
@@ -153,6 +188,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,
@@ -160,7 +196,10 @@ pub fn run() {
             save_image,
             import_image,
             list_dir,
-            find_markdown_files
+            find_markdown_files,
+            theme_folder_path,
+            list_themes,
+            read_theme
         ])
         .setup(|app| {
             // The window is described in tauri.conf.json ("create": false),

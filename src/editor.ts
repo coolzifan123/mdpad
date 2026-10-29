@@ -32,6 +32,7 @@ import { imageHandler, useImageBlocks } from './image-blocks';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
 import { ProseSearcher, searchHighlightPlugin, TextareaSearcher, type Searcher } from './search';
+import { centerCursor, currentBlockPlugin, writingModes } from './writing-modes';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -45,6 +46,8 @@ export interface EditorOptions {
   resolveImage: (src: string) => Promise<string> | string;
   /** Store a pasted or uploaded image; resolve the `src` to put in Markdown. */
   uploadImage: (file: File) => Promise<string>;
+  /** Ctrl+click on a link. */
+  openLink: (href: string) => void;
 }
 
 export interface Heading {
@@ -134,7 +137,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     })
     .use(upload)
     .use(keepFileTree)
-    .use(searchHighlightPlugin);
+    .use(searchHighlightPlugin)
+    .use(currentBlockPlugin);
   await useImageBlocks(crepe.editor);
 
   let destroyed = false;
@@ -170,6 +174,23 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     if (block.type.name === 'heading' && block.attrs.level === level) return call(turnIntoTextCommand);
     return call(wrapInHeadingCommand, level);
   };
+  /** Ctrl+= / Ctrl+-: paragraph ↔ heading 6 ↔ … ↔ heading 1. */
+  const shiftHeading = (step: -1 | 1) => {
+    const block = view.state.selection.$from.parent;
+    const level = block.type.name === 'heading' ? (block.attrs.level as number) : 7;
+    const next = Math.min(7, Math.max(1, level - step));
+    if (next === level) return false;
+    return next === 7 ? call(turnIntoTextCommand) : call(wrapInHeadingCommand, next);
+  };
+
+  // Ctrl+click opens a link.
+  view.dom.addEventListener('click', (event) => {
+    const link = (event.target as HTMLElement).closest('a');
+    if (!link || !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    options.openLink(link.getAttribute('href') ?? '');
+  });
+  writingModes.scroller = options.host;
 
   /** A bullet list whose items have checkboxes; toggles them in a list. */
   const taskList = () => {
@@ -218,6 +239,12 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     'heading-5': () => heading(5),
     'heading-6': () => heading(6),
     paragraph: () => call(turnIntoTextCommand),
+    'heading-up': () => shiftHeading(1),
+    'heading-down': () => shiftHeading(-1),
+    'center-cursor': () => {
+      centerCursor(view);
+      return true;
+    },
     bold: () => call(toggleStrongCommand),
     italic: () => call(toggleEmphasisCommand),
     'inline-code': () => call(toggleInlineCodeCommand),

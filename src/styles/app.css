@@ -545,6 +545,18 @@ body {
   tab-size: 4;
 }
 
+/* Focus mode (F8): dim every block except the one being written. */
+body.focus-mode .wysiwyg-root .ProseMirror > :not(.current-block) {
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+/* Typewriter mode (F9): room to keep the cursor mid-window at both ends. */
+body.typewriter .wysiwyg-root .milkdown .ProseMirror {
+  padding-top: 40vh;
+  padding-bottom: 50vh;
+}
+
 /* --- Status bar --------------------------------------------------------- */
 
 .statusbar {

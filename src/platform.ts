@@ -7,9 +7,11 @@
 
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { dirname, resolve } from '@tauri-apps/api/path';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { message, open, save } from '@tauri-apps/plugin-dialog';
+import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 export const inTauri = isTauri();
 
@@ -119,6 +121,53 @@ export async function exportFile(
   if (!target) return null;
   await invoke('write_text_file', { path: target, contents: content });
   return target;
+}
+
+// ---------------------------------------------------------------------------
+// Window, links, themes
+
+export async function toggleFullscreen(): Promise<void> {
+  if (inTauri) {
+    const win = getCurrentWindow();
+    await win.setFullscreen(!(await win.isFullscreen()));
+  } else if (document.fullscreenElement) {
+    await document.exitFullscreen();
+  } else {
+    await document.documentElement.requestFullscreen();
+  }
+}
+
+/** Zoom the whole window; 1 = 100%. */
+export async function setZoom(factor: number): Promise<void> {
+  if (inTauri) await getCurrentWebview().setZoom(factor);
+  else document.documentElement.style.zoom = String(factor);
+}
+
+/** Open a web or mail link in the default app. */
+export async function openExternal(url: string): Promise<void> {
+  if (inTauri) await openUrl(url);
+  else window.open(url, '_blank', 'noopener');
+}
+
+export async function revealInExplorer(path: string): Promise<void> {
+  if (inTauri) await revealItemInDir(path);
+}
+
+export async function themeFolder(): Promise<string | null> {
+  return inTauri ? invoke<string>('theme_folder_path') : null;
+}
+
+export async function listThemes(): Promise<string[]> {
+  return inTauri ? invoke<string[]>('list_themes') : [];
+}
+
+export async function readTheme(name: string): Promise<string> {
+  return invoke<string>('read_theme', { name });
+}
+
+export async function openThemeFolder(): Promise<void> {
+  const folder = await themeFolder();
+  if (folder) await openPath(folder);
 }
 
 /** The file passed on the command line, e.g. via "Open with" in Explorer. */

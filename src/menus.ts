@@ -11,6 +11,14 @@ export interface MenuState {
   darkTheme: boolean;
   /** The sidebar panel showing, or null when the sidebar is closed. */
   sidebar: 'files' | 'outline' | null;
+  focusMode: boolean;
+  typewriter: boolean;
+  /** Custom theme files, and the one in use. */
+  themes: string[];
+  customTheme: string | null;
+  setCustomTheme(name: string | null): void;
+  /** Whether the document has been saved to a file. */
+  hasPath: boolean;
   openRecent(path: string): void;
   clearRecent(): void;
 }
@@ -23,7 +31,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
     {
       label: 'File',
       items: () => {
-        const { recentFiles, autoSave, openRecent, clearRecent } = state();
+        const { recentFiles, autoSave, openRecent, clearRecent, hasPath } = state();
         const recent: MenuEntry[] = recentFiles.length
           ? [
               ...recentFiles.map((path) => ({ label: path, action: () => openRecent(path) })),
@@ -52,6 +60,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
           },
           { label: 'Print…', command: 'print' },
           'separator',
+          { label: 'Reveal in File Explorer', command: 'reveal-file', disabled: !hasPath },
           { label: 'Close', command: 'close' },
         ];
       },
@@ -84,6 +93,8 @@ export function buildMenus(state: () => MenuState): Menu[] {
         { label: 'Heading 5', command: 'heading-5' },
         { label: 'Heading 6', command: 'heading-6' },
         { label: 'Paragraph', command: 'paragraph' },
+        { label: 'Increase Heading Level', command: 'heading-up' },
+        { label: 'Decrease Heading Level', command: 'heading-down' },
         'separator',
         { label: 'Table', command: 'table' },
         { label: 'Code Block', command: 'code-block' },
@@ -114,15 +125,33 @@ export function buildMenus(state: () => MenuState): Menu[] {
     {
       label: 'View',
       items: () => {
-        const { sourceMode, darkTheme, sidebar } = state();
+        const { sourceMode, darkTheme, sidebar, focusMode, typewriter, themes, customTheme, setCustomTheme } = state();
+        const themeItems: MenuEntry[] = [
+          { label: 'Default', checked: !customTheme, action: () => setCustomTheme(null) },
+          ...themes.map((name) => ({
+            label: name.replace(/\.css$/i, ''),
+            checked: name === customTheme,
+            action: () => setCustomTheme(name),
+          })),
+          'separator',
+          { label: 'Open Theme Folder…', command: 'open-theme-folder' },
+        ];
         return [
           { label: 'Source Mode', command: 'toggle-source', checked: sourceMode },
+          { label: 'Focus Mode', command: 'toggle-focus', checked: focusMode },
+          { label: 'Typewriter Mode', command: 'toggle-typewriter', checked: typewriter },
           'separator',
           { label: 'Sidebar', command: 'toggle-sidebar', checked: sidebar !== null },
           { label: 'Outline', command: 'show-outline', checked: sidebar === 'outline' },
           { label: 'Files', command: 'show-files', checked: sidebar === 'files' },
           'separator',
           { label: 'Dark Theme', command: 'toggle-theme', checked: darkTheme },
+          { label: 'Theme', items: themeItems },
+          'separator',
+          { label: 'Full Screen', command: 'toggle-fullscreen' },
+          { label: 'Zoom In', command: 'zoom-in' },
+          { label: 'Zoom Out', command: 'zoom-out' },
+          { label: 'Actual Size', command: 'zoom-reset' },
         ];
       },
     },

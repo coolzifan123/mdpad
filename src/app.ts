@@ -14,7 +14,8 @@ import * as platform from './platform';
 import { quickOpen } from './quick-open';
 import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
 import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
-import { toggleTheme } from './theme';
+import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, toggleTheme } from './theme';
+import { writingModes } from './writing-modes';
 import { countText } from './wordcount';
 
 const APP_NAME = 'MdPad';
@@ -22,6 +23,14 @@ const UNTITLED = 'Untitled.md';
 const AUTO_SAVE_KEY = 'mdpad-autosave';
 /** The folder chosen with File > Open Folder. */
 const FOLDER_KEY = 'mdpad-folder';
+const VIEW_KEY = 'mdpad-view';
+
+interface ViewSettings {
+  focus: boolean;
+  typewriter: boolean;
+  /** 1 = 100% */
+  zoom: number;
+}
 /** Auto save waits this long after the last change. */
 const AUTO_SAVE_DELAY = 1500;
 
@@ -75,6 +84,10 @@ export class App {
   private readonly fileTree: FileTree;
   /** When a heading in the outline was last clicked. */
   private outlineJumpTime = 0;
+  /** Focus mode, typewriter mode and zoom; remembered between runs. */
+  private view: ViewSettings = loadView();
+  /** The .css files in the theme folder (View > Theme). */
+  private themes: string[] = [];
 
   /** Add new commands here, then bind them in keymap.ts or menus.ts. */
   private readonly commands: Record<string, () => unknown> = {
@@ -86,6 +99,14 @@ export class App {
     'toggle-autosave': () => this.toggleAutoSave(),
     'toggle-source': () => this.toggleSource(),
     'toggle-theme': () => toggleTheme(),
+    'toggle-focus': () => this.setView({ focus: !this.view.focus }),
+    'toggle-typewriter': () => this.setView({ typewriter: !this.view.typewriter }),
+    'toggle-fullscreen': () => platform.toggleFullscreen(),
+    'zoom-in': () => this.setView({ zoom: Math.min(3, round(this.view.zoom + 0.1)) }),
+    'zoom-out': () => this.setView({ zoom: Math.max(0.5, round(this.view.zoom - 0.1)) }),
+    'zoom-reset': () => this.setView({ zoom: 1 }),
+    'open-theme-folder': () => platform.openThemeFolder(),
+    'reveal-file': () => this.doc.path && platform.revealInExplorer(this.doc.path),
     'toggle-sidebar': () => this.sidebar.toggle(),
     'show-outline': () => this.sidebar.toggleTab('outline'),
     'show-files': () => this.sidebar.toggleTab('files'),
@@ -140,6 +161,12 @@ export class App {
         sourceMode: this.mode === 'source',
         darkTheme: document.documentElement.dataset.theme === 'dark',
         sidebar: this.sidebar.visible ? this.sidebar.activeTab : null,
+        focusMode: this.view.focus,
+        typewriter: this.view.typewriter,
+        themes: this.themes,
+        customTheme: savedCustomTheme(),
+        setCustomTheme: (name) => void this.run(() => applyCustomTheme(name, platform.readTheme)),
+        hasPath: this.doc.path !== null,
         openRecent: (path) => void this.run(() => this.openPath(path)),
         clearRecent: clearRecentFiles,
       })),
@@ -149,6 +176,8 @@ export class App {
 
   async start(): Promise<void> {
     this.bindEvents();
+    this.setView({});
+    await this.loadThemes();
     const initialPath = await platform.initialFilePath();
     if (initialPath) {
       try {
@@ -281,6 +310,51 @@ export class App {
     else this.editor?.focus();
   }
 
+  /** Change and remember view settings, and show them. */
+  private setView(change: Partial<ViewSettings>): void {
+    this.view = { ...this.view, ...change };
+    saveText(VIEW_KEY, JSON.stringify(this.view));
+    document.body.classList.toggle('focus-mode', this.view.focus);
+    document.body.classList.toggle('typewriter', this.view.typewriter);
+    writingModes.typewriter = this.view.typewriter;
+    if (change.typewriter) this.editor?.run('center-cursor');
+    if (change.zoom !== undefined || Object.keys(change).length === 0) void platform.setZoom(this.view.zoom);
+  }
+
+  /** Read the theme folder; put an example theme in it the first time. */
+  private async loadThemes(): Promise<void> {
+    try {
+      this.themes = await platform.listThemes();
+      if (!this.themes.length) {
+        const folder = await platform.themeFolder();
+        if (folder) {
+          await platform.writeFile(`${folder}\\Sepia.css`, 'Sepia.css', EXAMPLE_THEME);
+          this.themes = await platform.listThemes();
+        }
+      }
+      const saved = savedCustomTheme();
+      if (saved && this.themes.includes(saved)) await applyCustomTheme(saved, platform.readTheme);
+    } catch (error) {
+      console.warn('Could not load themes:', error);
+    }
+  }
+
+  /** Ctrl+click on a link: web links in the browser, Markdown files here. */
+  private async openLink(href: string): Promise<void> {
+    if (/^(https?:|mailto:)/i.test(href)) {
+      await platform.openExternal(href);
+    } else if (href.startsWith('#')) {
+      const slug = (text: string) => text.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '');
+      const target = decodeURIComponent(href.slice(1));
+      const index = this.editor?.headings().findIndex((h) => slug(h.text) === slug(target)) ?? -1;
+      if (index >= 0) this.editor?.revealHeading(index);
+    } else if (/\.(md|markdown|mdown|mkd|txt)$/i.test(href.split('#')[0]) && this.doc.path) {
+      const file = decodeURIComponent(href.split('#')[0]);
+      const path = /^([a-zA-Z]:[\\/]|[\\/])/.test(file) ? file : `${platform.folderOf(this.doc.path)}\\${file.replace(/\//g, '\\')}`;
+      await this.openPath(path);
+    }
+  }
+
   /** The document as a stand-alone HTML page. */
   private async htmlPage(forPrinting: boolean): Promise<string> {
     const { toHtmlPage } = await import('./export');
@@ -373,6 +447,7 @@ export class App {
       onChange: () => this.refreshDirty(),
       resolveImage: (src) => platform.resolveImageSrc(src, this.doc.path),
       uploadImage: (file) => platform.storeImage(file, this.doc.path),
+      openLink: (href) => void this.run(() => this.openLink(href)),
     });
     this.editor = editor;
     if (editor.mode === 'source') this.cleanSnapshot = toLf(this.doc.savedText);
@@ -501,6 +576,18 @@ function saveText(key: string, value: string): void {
     // Not critical.
   }
 }
+
+function loadView(): ViewSettings {
+  const defaults: ViewSettings = { focus: false, typewriter: false, zoom: 1 };
+  try {
+    return { ...defaults, ...JSON.parse(loadText(VIEW_KEY) ?? '{}') };
+  } catch {
+    return defaults;
+  }
+}
+
+/** 1.2000000002 → 1.2 */
+const round = (n: number) => Math.round(n * 10) / 10;
 
 const loadFlag = (key: string) => loadText(key) === 'true';
 const saveFlag = (key: string, value: boolean) => saveText(key, String(value));

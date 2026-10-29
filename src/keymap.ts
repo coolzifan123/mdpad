@@ -28,6 +28,8 @@ export const keymap: Record<string, string> = {
   'Mod+5': 'heading-5',
   'Mod+6': 'heading-6',
   'Mod+0': 'paragraph',
+  'Mod+=': 'heading-up',
+  'Mod+-': 'heading-down',
   'Mod+T': 'table',
   'Mod+Shift+K': 'code-block',
   'Mod+Shift+M': 'math-block',
@@ -48,6 +50,12 @@ export const keymap: Record<string, string> = {
   'Mod+Shift+L': 'toggle-sidebar',
   'Mod+Shift+1': 'show-outline',
   'Mod+Shift+3': 'show-files',
+  'F8': 'toggle-focus',
+  'F9': 'toggle-typewriter',
+  'F11': 'toggle-fullscreen',
+  'Mod+Shift+=': 'zoom-in',
+  'Mod+Shift+-': 'zoom-out',
+  'Mod+Shift+0': 'zoom-reset',
 };
 
 /**
@@ -66,6 +74,8 @@ export const textCommands = new Set([
   'heading-5',
   'heading-6',
   'paragraph',
+  'heading-up',
+  'heading-down',
   'table',
   'code-block',
   'math-block',
