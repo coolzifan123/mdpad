@@ -162,8 +162,30 @@ pub fn run() {
             list_dir,
             find_markdown_files
         ])
+        .setup(|app| {
+            // The window is described in tauri.conf.json ("create": false),
+            // and made here so tests can turn on the debugging port.
+            let config = app.config().app.windows[0].clone();
+            let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+            if let Some(port) = debug_port() {
+                window = window.additional_browser_args(&format!("{WEBVIEW_DEFAULT_ARGS} --remote-debugging-port={port}"));
+            }
+            window.build()?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running MdPad");
+}
+
+/// The browser arguments Tauri uses by default on Windows; keep them when
+/// adding our own.
+const WEBVIEW_DEFAULT_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+
+/// For automated tests: starting MdPad with MDPAD_DEBUG_PORT=9333 lets a
+/// test script drive the page through the DevTools protocol on that port.
+/// It only listens on this computer (127.0.0.1).
+fn debug_port() -> Option<u16> {
+    std::env::var("MDPAD_DEBUG_PORT").ok()?.parse().ok()
 }
 
 #[cfg(test)]
