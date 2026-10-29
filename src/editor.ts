@@ -28,7 +28,11 @@ import { AllSelection, TextSelection } from '@milkdown/kit/prose/state';
 import { $remark, callCommand } from '@milkdown/kit/utils';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
+import { codeBlockConfig } from '@milkdown/kit/component/code-block';
+import { frontmatter } from './frontmatter';
 import { imageHandler, useImageBlocks } from './image-blocks';
+import { mermaidPreview } from './mermaid';
+import { tocPlugin } from './toc';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
 import { ProseSearcher, searchHighlightPlugin, TextareaSearcher, type Searcher } from './search';
@@ -138,7 +142,20 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(upload)
     .use(keepFileTree)
     .use(searchHighlightPlugin)
-    .use(currentBlockPlugin);
+    .use(currentBlockPlugin)
+    .use(frontmatter)
+    .use(tocPlugin)
+    // Code blocks in "mermaid" show the diagram (math blocks already show
+    // their formula this way).
+    .config((ctx) =>
+      ctx.update(codeBlockConfig.key, (config) => ({
+        ...config,
+        renderPreview: (language, content, show) =>
+          language.toLowerCase() === 'mermaid' && content.trim()
+            ? mermaidPreview(content, show)
+            : config.renderPreview(language, content, show),
+      })),
+    );
   await useImageBlocks(crepe.editor);
 
   let destroyed = false;

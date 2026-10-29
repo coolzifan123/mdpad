@@ -5,6 +5,7 @@
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeStringify from 'rehype-stringify';
+import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
@@ -20,10 +21,13 @@ export interface PageOptions {
 export async function toHtmlPage(markdown: string, { title, resolveImage }: PageOptions): Promise<string> {
   const body = await unified()
     .use(remarkParse)
+    // Front matter is metadata: left out of the page.
+    .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
     .use(remarkMath)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex, { output: 'mathml' })
+    .use(() => (tree: HtmlNode) => renderDiagrams(tree))
     .use(rehypeHighlight)
     .use(() => (tree: HtmlNode) => rewriteImages(tree, resolveImage))
     .use(rehypeStringify, { allowDangerousHtml: true })
@@ -52,6 +56,34 @@ interface HtmlNode {
   tagName?: string;
   properties?: Record<string, unknown>;
   children?: HtmlNode[];
+  value?: string;
+}
+
+/** Replace ```mermaid code blocks with the drawn diagram (SVG). */
+async function renderDiagrams(tree: HtmlNode): Promise<void> {
+  const blocks: { parent: HtmlNode; index: number; source: string }[] = [];
+  const walk = (node: HtmlNode) => {
+    node.children?.forEach((child, index) => {
+      const code = child.tagName === 'pre' ? child.children?.[0] : undefined;
+      const classes = code?.properties?.className;
+      if (code?.tagName === 'code' && Array.isArray(classes) && classes.includes('language-mermaid')) {
+        blocks.push({ parent: node, index, source: (code.children ?? []).map((t) => t.value ?? '').join('') });
+      } else {
+        walk(child);
+      }
+    });
+  };
+  walk(tree);
+  if (!blocks.length) return;
+  const { renderMermaid } = await import('./mermaid');
+  for (const { parent, index, source } of blocks) {
+    try {
+      const svg = await renderMermaid(source, false);
+      parent.children![index] = { type: 'raw', value: `<figure class="diagram">${svg}</figure>` };
+    } catch {
+      // Leave the code as it is.
+    }
+  }
 }
 
 async function rewriteImages(tree: HtmlNode, resolve?: PageOptions['resolveImage']): Promise<void> {
@@ -104,6 +136,8 @@ th, td { padding: 6px 13px; border: 1px solid #d0d7de; }
 th { background: #f6f8fa; font-weight: 600; }
 tr:nth-child(2n) td { background: #fafbfc; }
 math[display="block"] { margin: 1em 0; overflow-x: auto; }
+.diagram { margin: 1em 0; text-align: center; }
+.diagram svg { max-width: 100%; height: auto; }
 .hljs-comment, .hljs-quote { color: #6e7781; font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type { color: #cf222e; }
 .hljs-string, .hljs-regexp, .hljs-attr-value, .hljs-addition { color: #0a3069; }

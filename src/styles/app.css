@@ -545,6 +545,49 @@ body {
   tab-size: 4;
 }
 
+/* Front matter: the "---" metadata block at the top of a file. */
+.milkdown .ProseMirror pre.front-matter {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--app-border);
+  border-radius: 4px;
+  background: var(--app-chrome-bg);
+  color: var(--app-fg-muted);
+  font: 13px/1.6 var(--app-font-code);
+  white-space: pre-wrap;
+}
+
+/* [TOC] */
+.milkdown .ProseMirror .toc-marker {
+  color: var(--app-fg-muted);
+  font-size: 12px;
+}
+
+.milkdown .ProseMirror .toc {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 16px;
+  padding: 8px 14px;
+  border-left: 3px solid var(--app-accent);
+  user-select: none;
+}
+
+.milkdown .ProseMirror .toc-item {
+  padding: 2px 0;
+  color: var(--app-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.milkdown .ProseMirror .toc-item:hover {
+  text-decoration: underline;
+}
+
+.mermaid-error {
+  color: #d1242f;
+  white-space: pre-wrap;
+}
+
 /* Focus mode (F8): dim every block except the one being written. */
 body.focus-mode .wysiwyg-root .ProseMirror > :not(.current-block) {
   opacity: 0.3;
