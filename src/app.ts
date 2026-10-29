@@ -1,15 +1,23 @@
 // The application: one open document, the active editor, and the commands
-// that the toolbar buttons and keyboard shortcuts run.
+// that the menus and keyboard shortcuts run.
 
+import { askText } from './dialog';
 import { createEditor, type EditorMode, type MarkdownEditor } from './editor';
-import { isReloadKey, keymap, shortcutFor } from './keymap';
+import { FindBar, type FindBarElements } from './find-bar';
+import { isReloadKey, keymap, shortcutFor, textCommands } from './keymap';
 import { detectLineEnding, toLf, withLineEnding, type LineEnding } from './markdown-style';
+import { MenuBar } from './menu';
+import { buildMenus } from './menus';
 import * as platform from './platform';
+import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
 import { toggleTheme } from './theme';
 import { countText } from './wordcount';
 
 const APP_NAME = 'MdPad';
 const UNTITLED = 'Untitled.md';
+const AUTO_SAVE_KEY = 'mdpad-autosave';
+/** Auto save waits this long after the last change. */
+const AUTO_SAVE_DELAY = 1500;
 
 interface DocumentState {
   /** Absolute path, or null for a document that was never saved. */
@@ -24,11 +32,12 @@ interface DocumentState {
 
 export interface AppElements {
   host: HTMLElement;
+  menuBar: HTMLElement;
   docName: HTMLElement;
   dirtyMark: HTMLElement;
   statusMode: HTMLElement;
   statusCount: HTMLElement;
-  sourceButton: HTMLElement;
+  findBar: FindBarElements;
 }
 
 export class App {
@@ -51,18 +60,59 @@ export class App {
   private busy = false;
   /** Set once the user has agreed to close the window. */
   private closing = false;
+  private autoSave = loadFlag(AUTO_SAVE_KEY);
+  private autoSaveTimer: number | undefined;
+  private readonly findBar: FindBar;
 
-  /** Add new commands here, then bind them in keymap.ts or index.html. */
+  /** Add new commands here, then bind them in keymap.ts or menus.ts. */
   private readonly commands: Record<string, () => unknown> = {
     new: () => this.newDocument(),
     open: () => this.openDocument(),
     save: () => this.save(false),
     'save-as': () => this.save(true),
+    close: () => platform.closeWindow(),
+    'toggle-autosave': () => this.toggleAutoSave(),
     'toggle-source': () => this.toggleSource(),
     'toggle-theme': () => toggleTheme(),
+    find: () => this.findBar.open(false),
+    replace: () => this.findBar.open(true),
+    'find-next': () => this.findBar.step(1),
+    'find-previous': () => this.findBar.step(-1),
+    cut: () => document.execCommand('cut'),
+    copy: () => document.execCommand('copy'),
+    paste: () => this.paste(false),
+    'paste-plain': () => this.paste(true),
+    'select-all': () => this.editor?.run('select-all'),
+    undo: () => this.editor?.run('undo'),
+    redo: () => this.editor?.run('redo'),
+    hr: () => this.editor?.run('hr'),
+    link: () => this.insertLink(),
+    image: () => this.insertImage(),
+    about: () => platform.showMessage(`${APP_NAME} ${__APP_VERSION__}\n\nA free, open-source Markdown editor.`, `About ${APP_NAME}`),
   };
 
-  constructor(private readonly ui: AppElements) {}
+  constructor(private readonly ui: AppElements) {
+    // Formatting commands go straight to the editor.
+    for (const command of textCommands) this.commands[command] ??= () => this.editor?.run(command);
+
+    this.findBar = new FindBar(
+      ui.findBar,
+      () => this.editor?.searcher ?? null,
+      () => this.editor?.focus(),
+    );
+    new MenuBar(
+      ui.menuBar,
+      buildMenus(() => ({
+        recentFiles: recentFiles(),
+        autoSave: this.autoSave,
+        sourceMode: this.mode === 'source',
+        darkTheme: document.documentElement.dataset.theme === 'dark',
+        openRecent: (path) => void this.run(() => this.openPath(path)),
+        clearRecent: clearRecentFiles,
+      })),
+      (command) => void this.run(command),
+    );
+  }
 
   async start(): Promise<void> {
     this.bindEvents();
@@ -78,8 +128,9 @@ export class App {
     await this.load({ path: null, name: UNTITLED, content: '' });
   }
 
-  async run(command: string): Promise<void> {
-    const action = this.commands[command];
+  /** Run a command by name (or a function), one at a time. */
+  async run(command: string | (() => unknown)): Promise<void> {
+    const action = typeof command === 'string' ? this.commands[command] : command;
     if (!action || this.busy) return;
     this.busy = true;
     try {
@@ -105,6 +156,16 @@ export class App {
     if (file) await this.load(file);
   }
 
+  private async openPath(path: string): Promise<void> {
+    if (!(await this.confirmDiscardChanges())) return;
+    try {
+      await this.load(await platform.readFile(path));
+    } catch (error) {
+      removeRecentFile(path);
+      await platform.showError(`Could not open ${path}\n\n${error}`);
+    }
+  }
+
   /** Resolves true if the document was saved. */
   private async save(saveAs: boolean): Promise<boolean> {
     if (!this.editor) return false;
@@ -121,8 +182,25 @@ export class App {
 
     if (markdown !== null) this.cleanSnapshot = markdown;
     this.doc = { path: written.path, name: written.name, savedText: text, lineEnding, dirty: false };
+    if (written.path) addRecentFile(written.path);
     this.updateUi();
     return true;
+  }
+
+  private toggleAutoSave(): void {
+    this.autoSave = !this.autoSave;
+    saveFlag(AUTO_SAVE_KEY, this.autoSave);
+    this.scheduleAutoSave();
+  }
+
+  /** Saves a little after the last change, if Auto Save is on. */
+  private scheduleAutoSave(): void {
+    window.clearTimeout(this.autoSaveTimer);
+    if (!this.autoSave || !this.doc.path || !this.doc.dirty) return;
+    this.autoSaveTimer = window.setTimeout(() => {
+      if (this.busy) this.scheduleAutoSave();
+      else void this.run(() => this.save(false));
+    }, AUTO_SAVE_DELAY);
   }
 
   private async toggleSource(): Promise<void> {
@@ -136,6 +214,27 @@ export class App {
     await this.mountEditor(markdown);
   }
 
+  private async paste(plain: boolean): Promise<void> {
+    const text = await platform.readClipboardText();
+    if (!text) {
+      await platform.showError(`Could not read the clipboard. Use ${plain ? 'Ctrl+Shift+V' : 'Ctrl+V'} instead.`);
+      return;
+    }
+    this.editor?.run(plain ? 'paste-plain' : 'paste', text);
+  }
+
+  private async insertLink(): Promise<void> {
+    const href = await askText('Link address', { placeholder: 'https://' });
+    this.editor?.focus();
+    if (href) this.editor?.run('link', href);
+  }
+
+  private async insertImage(): Promise<void> {
+    const image = await platform.pickImage(this.doc.path);
+    this.editor?.focus();
+    if (image) this.editor?.run('image', image);
+  }
+
   // -------------------------------------------------------------------------
   // Document lifecycle
 
@@ -147,6 +246,7 @@ export class App {
       lineEnding: detectLineEnding(file.content),
       dirty: false,
     };
+    if (file.path) addRecentFile(file.path);
     await this.mountEditor(toLf(file.content));
   }
 
@@ -168,7 +268,8 @@ export class App {
 
     this.refreshDirty();
     this.updateUi();
-    editor.focus();
+    if (this.findBar.isOpen) this.findBar.refresh();
+    else editor.focus();
   }
 
   /** Asks about unsaved changes. Resolves true if it's OK to continue. */
@@ -189,16 +290,13 @@ export class App {
       this.updateUi();
     }
     this.updateWordCount(markdown);
+    this.scheduleAutoSave();
   }
 
   // -------------------------------------------------------------------------
   // UI
 
   private bindEvents(): void {
-    for (const button of document.querySelectorAll<HTMLElement>('[data-command]')) {
-      button.addEventListener('click', () => void this.run(button.dataset.command!));
-    }
-
     // Capture phase, so our shortcuts win over the editor's own.
     document.addEventListener(
       'keydown',
@@ -209,11 +307,13 @@ export class App {
         }
         const shortcut = shortcutFor(event);
         const command = shortcut && keymap[shortcut];
-        if (command) {
-          event.preventDefault();
-          event.stopPropagation();
-          void this.run(command);
-        }
+        if (!command) return;
+        // In a code block or a text field, leave text editing keys alone.
+        const target = event.target as HTMLElement | null;
+        if (textCommands.has(command) && (target?.closest('.cm-editor') || target?.tagName === 'INPUT')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void this.run(command);
       },
       true,
     );
@@ -244,7 +344,6 @@ export class App {
     this.ui.docName.textContent = name;
     this.ui.docName.title = this.doc.path ?? 'Not saved yet';
     this.ui.dirtyMark.hidden = !dirty;
-    this.ui.sourceButton.classList.toggle('active', this.mode === 'source');
     this.ui.statusMode.textContent = this.mode === 'source' ? 'Source' : 'Live preview';
     void platform.setWindowTitle(`${dirty ? '● ' : ''}${name} - ${APP_NAME}`);
   }
@@ -253,5 +352,21 @@ export class App {
     const { words, characters } = countText(markdown);
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
     this.ui.statusCount.textContent = `${plural(words, 'word')} · ${plural(characters, 'character')}`;
+  }
+}
+
+function loadFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function saveFlag(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+    // Not critical.
   }
 }

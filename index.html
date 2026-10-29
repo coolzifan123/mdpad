@@ -6,22 +6,31 @@
     <title>MdPad</title>
   </head>
   <body>
-    <header class="toolbar">
-      <div class="toolbar-group">
-        <button data-command="new" title="New (Ctrl+N)">New</button>
-        <button data-command="open" title="Open (Ctrl+O)">Open</button>
-        <button data-command="save" title="Save (Ctrl+S)">Save</button>
-      </div>
+    <!-- The menus (File, Edit, ...) are added by src/menu.ts. -->
+    <header class="menubar" id="menu-bar">
       <div class="doc-title">
         <span id="doc-name">Untitled.md</span>
         <span id="dirty-mark" title="Unsaved changes" hidden>●</span>
       </div>
-      <div class="toolbar-group">
-        <button data-command="toggle-source" id="source-button" title="Source mode (Ctrl+/)">Source</button>
-        <button data-command="toggle-theme" title="Light / dark theme">Theme</button>
-      </div>
     </header>
-    <main id="editor-host"></main>
+    <div class="editor-area">
+      <main id="editor-host"></main>
+      <div class="find-bar" id="find-bar" hidden>
+        <div class="find-row">
+          <input id="find-input" type="text" placeholder="Find" spellcheck="false" aria-label="Find" />
+          <span id="find-count" class="find-count"></span>
+          <button id="find-case" title="Match case" aria-pressed="false">Aa</button>
+          <button id="find-previous" title="Previous match (Shift+Enter)" aria-label="Previous match">↑</button>
+          <button id="find-next" title="Next match (Enter)" aria-label="Next match">↓</button>
+          <button id="find-close" title="Close (Esc)" aria-label="Close">✕</button>
+        </div>
+        <div class="find-row" id="replace-row">
+          <input id="replace-input" type="text" placeholder="Replace" spellcheck="false" aria-label="Replace" />
+          <button id="replace-one" title="Replace this match (Enter)">Replace</button>
+          <button id="replace-all" title="Replace every match">All</button>
+        </div>
+      </div>
+    </div>
     <footer class="statusbar">
       <span id="status-mode">Live preview</span>
       <span id="status-count"></span>

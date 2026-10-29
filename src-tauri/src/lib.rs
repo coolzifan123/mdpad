@@ -29,13 +29,28 @@ fn initial_file() -> Option<String> {
 /// the relative path to use in the Markdown, e.g. `assets/image-1.png`.
 #[tauri::command]
 fn save_image(doc_path: String, file_name: String, bytes: Vec<u8>) -> Result<String, String> {
-    let folder = Path::new(&doc_path)
+    store_image(&doc_path, &file_name, &bytes)
+}
+
+/// Copies an image file chosen with "Insert Image" into the `assets` folder.
+#[tauri::command]
+fn import_image(doc_path: String, source: String) -> Result<String, String> {
+    let bytes = fs::read(&source).map_err(|e| e.to_string())?;
+    let file_name = Path::new(&source)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("image.png");
+    store_image(&doc_path, file_name, &bytes)
+}
+
+fn store_image(doc_path: &str, file_name: &str, bytes: &[u8]) -> Result<String, String> {
+    let folder = Path::new(doc_path)
         .parent()
         .ok_or("The document has no folder")?
         .join("assets");
     fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
 
-    let (stem, ext) = split_file_name(&file_name);
+    let (stem, ext) = split_file_name(file_name);
     let mut name = format!("{stem}.{ext}");
     let mut n = 1;
     while folder.join(&name).exists() {
@@ -70,7 +85,8 @@ pub fn run() {
             read_text_file,
             write_text_file,
             initial_file,
-            save_image
+            save_image,
+            import_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running MdPad");

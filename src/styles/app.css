@@ -22,56 +22,111 @@ body {
   font-size: 13px;
 }
 
-/* --- Toolbar ------------------------------------------------------------ */
+/* --- Menu bar ----------------------------------------------------------- */
 
-.toolbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+.menubar {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 4px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-chrome-bg);
   user-select: none;
 }
 
-.toolbar-group {
-  display: flex;
-  gap: 2px;
-}
-
-.toolbar-group:last-child {
-  justify-content: flex-end;
-}
-
-.toolbar button {
-  height: 28px;
-  padding: 0 10px;
+.menubar-item {
+  height: 24px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
-  color: var(--app-fg-muted);
+  color: var(--app-fg);
   font: inherit;
-  cursor: pointer;
+  cursor: default;
 }
 
-.toolbar button:hover {
+.menubar-item:hover,
+.menubar-item.open {
   background: var(--app-hover);
-  color: var(--app-fg);
-}
-
-.toolbar button.active {
-  background: var(--app-active);
-  color: var(--app-fg);
 }
 
 .doc-title {
+  position: absolute;
+  left: 50%;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  font-weight: 600;
+  max-width: 40%;
+  transform: translateX(-50%);
+  color: var(--app-fg-muted);
+  pointer-events: none;
+}
+
+.menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 230px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  user-select: none;
+}
+
+.menu.submenu {
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  display: none;
+  max-width: 480px;
+}
+
+.menu-row:hover > .submenu {
+  display: block;
+}
+
+.menu-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.menu-row:hover:not(.disabled) {
+  background: var(--app-hover);
+}
+
+.menu-row.disabled {
+  color: var(--app-fg-muted);
+}
+
+.menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-check {
+  text-align: center;
+  color: var(--app-accent);
+}
+
+.menu-shortcut {
+  padding-left: 24px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--app-border);
 }
 
 #doc-name {
@@ -87,10 +142,171 @@ body {
 
 /* --- Editor area -------------------------------------------------------- */
 
+.editor-area {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 #editor-host {
   flex: 1;
   overflow-y: auto;
   background: var(--app-bg);
+}
+
+/* --- Find bar ----------------------------------------------------------- */
+
+.find-bar {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-chrome-bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.find-bar[hidden],
+.find-row[hidden] {
+  display: none;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.find-bar input {
+  width: 220px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  outline: none;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font: inherit;
+}
+
+.find-bar input:focus {
+  border-color: var(--app-accent);
+}
+
+.find-bar button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.find-bar button:hover,
+.find-bar button[aria-pressed='true'] {
+  background: var(--app-hover);
+  color: var(--app-fg);
+}
+
+.find-count {
+  min-width: 72px;
+  padding: 0 6px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.find-count.none {
+  color: #d1242f;
+}
+
+.search-match {
+  border-radius: 2px;
+  background: rgba(255, 200, 0, 0.35);
+}
+
+.search-match.current {
+  background: rgba(255, 140, 0, 0.65);
+}
+
+/* --- Dialog ------------------------------------------------------------- */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, 90vw);
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.dialog input {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  outline: none;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font: inherit;
+  font-weight: normal;
+}
+
+.dialog input:focus {
+  border-color: var(--app-accent);
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-buttons button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  background: var(--app-chrome-bg);
+  color: var(--app-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dialog-buttons button.primary {
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+  color: #fff;
 }
 
 .wysiwyg-root {

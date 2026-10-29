@@ -84,6 +84,11 @@ export async function askUnsavedChanges(docName: string): Promise<UnsavedChoice>
   return 'cancel';
 }
 
+export async function showMessage(text: string, title: string): Promise<void> {
+  if (inTauri) await message(text, { title, kind: 'info' });
+  else alert(text);
+}
+
 export async function showError(text: string): Promise<void> {
   if (inTauri) await message(text, { title: 'Error', kind: 'error' });
   else alert(text);
@@ -106,8 +111,40 @@ export function onCloseRequested(handler: () => Promise<boolean>): void {
   }
 }
 
+/** Ask to close the window (the unsaved-changes check still runs). */
+export async function closeWindow(): Promise<void> {
+  if (inTauri) await getCurrentWindow().close();
+  else window.close();
+}
+
+export async function readClipboardText(): Promise<string> {
+  try {
+    return await navigator.clipboard.readText();
+  } catch {
+    return '';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Images
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'];
+
+/**
+ * Ask for an image file to insert. For a saved document it is copied to the
+ * `assets` folder, like a pasted image. Resolves the `src` for the Markdown.
+ */
+export async function pickImage(docPath: string | null): Promise<{ src: string; alt: string } | null> {
+  if (!inTauri) {
+    const file = await browserPickImage();
+    return file ? { src: await fileToDataUrl(file), alt: file.name.replace(/\.[^.]+$/, '') } : null;
+  }
+  const path = await open({ multiple: false, directory: false, filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] });
+  if (typeof path !== 'string') return null;
+  const alt = baseName(path).replace(/\.[^.]+$/, '');
+  if (docPath) return { src: await invoke<string>('import_image', { docPath, source: path }), alt };
+  return { src: encodeURI(path.replace(/\\/g, '/')), alt };
+}
 
 const EXTERNAL_URL = /^(https?:|data:|blob:|asset:|file:)/i;
 
@@ -166,6 +203,17 @@ function browserPickFile(): Promise<OpenedFile | null> {
       const file = input.files?.[0];
       resolvePromise(file ? { path: null, name: file.name, content: await file.text() } : null);
     };
+    input.oncancel = () => resolvePromise(null);
+    input.click();
+  });
+}
+
+function browserPickImage(): Promise<File | null> {
+  return new Promise((resolvePromise) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => resolvePromise(input.files?.[0] ?? null);
     input.oncancel = () => resolvePromise(null);
     input.click();
   });
