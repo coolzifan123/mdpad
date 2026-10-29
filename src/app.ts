@@ -316,8 +316,11 @@ export class App {
     };
     if (file.path) addRecentFile(file.path);
     await this.mountEditor(toLf(file.content));
-    // The file tree shows the chosen folder, or else the file's own folder.
-    await this.fileTree.setRoot(loadText(FOLDER_KEY) ?? (file.path ? platform.folderOf(file.path) : null));
+    // The file tree shows the chosen folder, or else the file's own folder
+    // (but stays put for a file inside the folder it already shows).
+    const shown = this.fileTree.folder;
+    const keep = !file.path || (shown !== null && platform.isInside(file.path, shown));
+    await this.fileTree.setRoot(loadText(FOLDER_KEY) ?? (keep ? shown : platform.folderOf(file.path!)));
     this.fileTree.setCurrent(file.path);
   }
 

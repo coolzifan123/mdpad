@@ -94,6 +94,12 @@ export function folderOf(path: string): string {
   return path.replace(/[\\/][^\\/]*$/, '');
 }
 
+/** Whether `path` is inside `folder` (Windows paths: any case, \ or /). */
+export function isInside(path: string, folder: string): boolean {
+  const normal = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+  return normal(path).startsWith(normal(folder) + '\\');
+}
+
 /** The file passed on the command line, e.g. via "Open with" in Explorer. */
 export async function initialFilePath(): Promise<string | null> {
   return inTauri ? invoke<string | null>('initial_file') : null;
