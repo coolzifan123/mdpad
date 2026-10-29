@@ -80,7 +80,8 @@ body {
   top: -5px;
   left: 100%;
   display: none;
-  max-width: 480px;
+  width: max-content;
+  max-width: 560px;
 }
 
 .menu-row:hover > .submenu {

@@ -81,6 +81,7 @@ fn split_file_name(file_name: &str) -> (String, String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,

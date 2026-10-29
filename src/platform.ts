@@ -8,6 +8,7 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { dirname, resolve } from '@tauri-apps/api/path';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { message, open, save } from '@tauri-apps/plugin-dialog';
 
 export const inTauri = isTauri();
@@ -117,9 +118,10 @@ export async function closeWindow(): Promise<void> {
   else window.close();
 }
 
+/** Through Tauri: the webview's own clipboard API asks for permission. */
 export async function readClipboardText(): Promise<string> {
   try {
-    return await navigator.clipboard.readText();
+    return inTauri ? await readText() : await navigator.clipboard.readText();
   } catch {
     return '';
   }
