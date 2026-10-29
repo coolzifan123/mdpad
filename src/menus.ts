@@ -42,6 +42,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
           : [{ label: 'No recent files', disabled: true }];
         return [
           { label: 'New', command: 'new' },
+          { label: 'New Window', command: 'new-window' },
           { label: 'Open…', command: 'open' },
           { label: 'Open Folder…', command: 'open-folder' },
           { label: 'Quick Open…', command: 'quick-open' },

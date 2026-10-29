@@ -6,18 +6,107 @@ use std::path::Path;
 use tauri::Manager;
 
 const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
+const UTF16LE_BOM: &[u8] = b"\xFF\xFE";
+const UTF16BE_BOM: &[u8] = b"\xFE\xFF";
 
-#[tauri::command]
-fn read_text_file(path: String) -> Result<String, String> {
-    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
-    // Windows Notepad sometimes adds a BOM; drop it.
-    let bytes = bytes.strip_prefix(UTF8_BOM).unwrap_or(&bytes);
-    String::from_utf8(bytes.to_vec()).map_err(|_| format!("{path} is not a UTF-8 text file"))
+/// A text file as read from disk, with what's needed to write it back the
+/// same way.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TextFile {
+    content: String,
+    /// "UTF-8", "UTF-16LE", "UTF-16BE" or "GB18030" (older Chinese files).
+    encoding: String,
+    /// Whether a UTF-8 file starts with a byte order mark (Notepad adds one).
+    bom: bool,
+    /// When the file last changed, in ms since 1970; to notice outside edits.
+    modified: u64,
 }
 
 #[tauri::command]
-fn write_text_file(path: String, contents: String) -> Result<(), String> {
-    fs::write(&path, contents).map_err(|e| e.to_string())
+fn read_text_file(path: String) -> Result<TextFile, String> {
+    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+    let file = |content: String, encoding: &str, bom: bool| TextFile {
+        content,
+        encoding: encoding.into(),
+        bom,
+        modified: modified_ms(&path),
+    };
+    let decode = |encoding: &'static encoding_rs::Encoding, bytes: &[u8]| {
+        let (text, had_errors) = encoding.decode_without_bom_handling(bytes);
+        (!had_errors).then(|| text.into_owned())
+    };
+    if let Some(rest) = bytes.strip_prefix(UTF16LE_BOM) {
+        if let Some(text) = decode(encoding_rs::UTF_16LE, rest) {
+            return Ok(file(text, "UTF-16LE", true));
+        }
+    }
+    if let Some(rest) = bytes.strip_prefix(UTF16BE_BOM) {
+        if let Some(text) = decode(encoding_rs::UTF_16BE, rest) {
+            return Ok(file(text, "UTF-16BE", true));
+        }
+    }
+    let (bom, body) = match bytes.strip_prefix(UTF8_BOM) {
+        Some(rest) => (true, rest),
+        None => (false, &bytes[..]),
+    };
+    if let Ok(text) = std::str::from_utf8(body) {
+        return Ok(file(text.to_owned(), "UTF-8", bom));
+    }
+    // Not UTF-8: most likely an older Chinese file (GBK / GB18030).
+    match decode(encoding_rs::GB18030, body) {
+        Some(text) => Ok(file(text, "GB18030", false)),
+        None => Err(format!("{path} is not a text file MdPad can read")),
+    }
+}
+
+/// Writes `contents` in the given encoding (default UTF-8) and returns the
+/// file's new modification time.
+#[tauri::command]
+fn write_text_file(path: String, contents: String, encoding: Option<String>, bom: Option<bool>) -> Result<u64, String> {
+    let mut bytes = Vec::new();
+    match encoding.as_deref().unwrap_or("UTF-8") {
+        "GB18030" => bytes.extend_from_slice(&encoding_rs::GB18030.encode(&contents).0),
+        "UTF-16LE" => {
+            bytes.extend_from_slice(UTF16LE_BOM);
+            contents.encode_utf16().for_each(|unit| bytes.extend_from_slice(&unit.to_le_bytes()));
+        }
+        "UTF-16BE" => {
+            bytes.extend_from_slice(UTF16BE_BOM);
+            contents.encode_utf16().for_each(|unit| bytes.extend_from_slice(&unit.to_be_bytes()));
+        }
+        _ => {
+            if bom.unwrap_or(false) {
+                bytes.extend_from_slice(UTF8_BOM);
+            }
+            bytes.extend_from_slice(contents.as_bytes());
+        }
+    }
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(modified_ms(&path))
+}
+
+/// When the file last changed (ms since 1970), or None if it's gone.
+#[tauri::command]
+fn file_modified(path: String) -> Option<u64> {
+    Path::new(&path).exists().then(|| modified_ms(&path))
+}
+
+fn modified_ms(path: &str) -> u64 {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|age| age.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Opens another MdPad window (a new copy of the program).
+#[tauri::command]
+fn new_window() -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    std::process::Command::new(exe).spawn().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// The file passed on the command line (e.g. "Open with" in Explorer).
@@ -199,7 +288,9 @@ pub fn run() {
             find_markdown_files,
             theme_folder_path,
             list_themes,
-            read_theme
+            read_theme,
+            file_modified,
+            new_window
         ])
         .setup(|app| {
             // The window is described in tauri.conf.json ("create": false),

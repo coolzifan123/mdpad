@@ -5,6 +5,7 @@
 export const keymap: Record<string, string> = {
   // File
   'Mod+N': 'new',
+  'Mod+Shift+N': 'new-window',
   'Mod+O': 'open',
   'Mod+P': 'quick-open',
   'Mod+S': 'save',

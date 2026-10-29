@@ -44,6 +44,10 @@ interface DocumentState {
   savedText: string;
   /** The editor always uses "\n"; files are saved with their own line endings. */
   lineEnding: LineEnding;
+  /** Saved back in the file's own encoding (UTF-8, GB18030, …). */
+  format: platform.FileFormat;
+  /** When the file last changed on disk as far as we know (ms). */
+  modified: number;
   dirty: boolean;
 }
 
@@ -64,6 +68,8 @@ export class App {
     name: UNTITLED,
     savedText: '',
     lineEnding: detectLineEnding(''),
+    format: platform.DEFAULT_FORMAT,
+    modified: 0,
     dirty: false,
   };
   private editor: MarkdownEditor | null = null;
@@ -94,6 +100,7 @@ export class App {
   /** Add new commands here, then bind them in keymap.ts or menus.ts. */
   private readonly commands: Record<string, () => unknown> = {
     new: () => this.newDocument(),
+    'new-window': () => platform.newWindow(),
     open: () => this.openDocument(),
     save: () => this.save(false),
     'save-as': () => this.save(true),
@@ -191,7 +198,7 @@ export class App {
         await platform.showError(`Could not open ${initialPath}\n\n${error}`);
       }
     }
-    await this.load({ path: null, name: UNTITLED, content: '' });
+    await this.load(blankDocument());
   }
 
   /** Run a command by name (or a function), one at a time. */
@@ -213,7 +220,7 @@ export class App {
 
   private async newDocument(): Promise<void> {
     if (!(await this.confirmDiscardChanges())) return;
-    await this.load({ path: null, name: UNTITLED, content: '' });
+    await this.load(blankDocument());
   }
 
   private async openDocument(): Promise<void> {
@@ -241,13 +248,21 @@ export class App {
     if (!saveAs && this.doc.path && !this.doc.dirty) return true;
 
     const markdown = this.doc.dirty ? this.editor.getMarkdown() : null;
-    const { lineEnding } = this.doc;
+    const { lineEnding, format } = this.doc;
     const text = markdown === null ? this.doc.savedText : withLineEnding(markdown, lineEnding);
-    const written = await platform.writeFile(saveAs ? null : this.doc.path, this.doc.name, text);
+    const written = await platform.writeFile(saveAs ? null : this.doc.path, this.doc.name, text, format);
     if (!written) return false;
 
     if (markdown !== null) this.cleanSnapshot = markdown;
-    this.doc = { path: written.path, name: written.name, savedText: text, lineEnding, dirty: false };
+    this.doc = {
+      path: written.path,
+      name: written.name,
+      savedText: text,
+      lineEnding,
+      format,
+      modified: written.modified,
+      dirty: false,
+    };
     if (written.path) {
       addRecentFile(written.path);
       // A new file may need to appear in the file tree.
@@ -312,6 +327,24 @@ export class App {
     const path = await quickOpen(candidates);
     if (path) await this.openPath(path);
     else this.editor?.focus();
+  }
+
+  /**
+   * Another program changed the open file: reload it, or ask first when
+   * there are unsaved changes here. Checked when the window gets focus.
+   */
+  private async checkOutsideChange(): Promise<void> {
+    const { path, modified } = this.doc;
+    if (!path || !modified) return;
+    const now = await platform.fileModified(path);
+    if (now === null || now === modified) return;
+    this.refreshDirty();
+    if (!this.doc.dirty || (await platform.askReloadChangedFile(this.doc.name))) {
+      await this.load(await platform.readFile(path));
+    } else {
+      // Keep this version; don't ask again for the same change.
+      this.doc.modified = now;
+    }
   }
 
   /** Change and remember view settings, and show them. */
@@ -429,6 +462,8 @@ export class App {
       name: file.name,
       savedText: file.content,
       lineEnding: detectLineEnding(file.content),
+      format: file.format,
+      modified: file.modified,
       dirty: false,
     };
     if (file.path) addRecentFile(file.path);
@@ -529,6 +564,10 @@ export class App {
       true,
     );
 
+    window.addEventListener('focus', () => {
+      if (!this.busy) void this.run(() => this.checkOutsideChange());
+    });
+
     // A file dropped outside the editor would make the webview open it in
     // place of the app. (Milkdown handles files dropped inside the editor.)
     for (const type of ['dragover', 'drop'] as const) {
@@ -555,7 +594,10 @@ export class App {
     this.ui.docName.textContent = name;
     this.ui.docName.title = this.doc.path ?? 'Not saved yet';
     this.ui.dirtyMark.hidden = !dirty;
-    this.ui.statusMode.textContent = this.mode === 'source' ? 'Source' : 'Live preview';
+    // Show the encoding only when it's not plain UTF-8.
+    const { encoding, bom } = this.doc.format;
+    const format = encoding !== 'UTF-8' ? encoding : bom ? 'UTF-8 with BOM' : '';
+    this.ui.statusMode.textContent = [this.mode === 'source' ? 'Source' : 'Live preview', format].filter(Boolean).join(' · ');
     void platform.setWindowTitle(`${dirty ? '● ' : ''}${name} - ${APP_NAME}`);
   }
 
@@ -580,6 +622,10 @@ function saveText(key: string, value: string): void {
   } catch {
     // Not critical.
   }
+}
+
+function blankDocument(): platform.OpenedFile {
+  return { path: null, name: UNTITLED, content: '', format: platform.DEFAULT_FORMAT, modified: 0 };
 }
 
 function loadView(): ViewSettings {

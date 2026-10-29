@@ -10,16 +10,29 @@ import { dirname, resolve } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
-import { message, open, save } from '@tauri-apps/plugin-dialog';
+import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 export const inTauri = isTauri();
+
+/** How a file is stored on disk, so it can be saved back the same way. */
+export interface FileFormat {
+  /** "UTF-8", "UTF-16LE", "UTF-16BE" or "GB18030". */
+  encoding: string;
+  /** A UTF-8 file that starts with a byte order mark. */
+  bom: boolean;
+}
+
+export const DEFAULT_FORMAT: FileFormat = { encoding: 'UTF-8', bom: false };
 
 export interface OpenedFile {
   /** Absolute path on disk. `null` in browser mode. */
   path: string | null;
   name: string;
   content: string;
+  format: FileFormat;
+  /** When the file last changed (ms), to notice changes by other programs. */
+  modified: number;
 }
 
 export type UnsavedChoice = 'save' | 'discard' | 'cancel';
@@ -33,8 +46,27 @@ export function baseName(path: string): string {
 }
 
 export async function readFile(path: string): Promise<OpenedFile> {
-  const content = await invoke<string>('read_text_file', { path });
-  return { path, name: baseName(path), content };
+  const file = await invoke<{ content: string; encoding: string; bom: boolean; modified: number }>('read_text_file', {
+    path,
+  });
+  return {
+    path,
+    name: baseName(path),
+    content: file.content,
+    format: { encoding: file.encoding, bom: file.bom },
+    modified: file.modified,
+  };
+}
+
+/** When the file last changed (ms), or null if it no longer exists. */
+export async function fileModified(path: string): Promise<number | null> {
+  return inTauri ? invoke<number | null>('file_modified', { path }) : null;
+}
+
+/** Open another MdPad window. */
+export async function newWindow(): Promise<void> {
+  if (inTauri) await invoke('new_window');
+  else window.open(location.href, '_blank');
 }
 
 /** Ask the user for a file and read it. Resolves `null` if cancelled. */
@@ -54,16 +86,17 @@ export async function writeFile(
   path: string | null,
   suggestedName: string,
   content: string,
-): Promise<{ path: string | null; name: string } | null> {
+  format: FileFormat = DEFAULT_FORMAT,
+): Promise<{ path: string | null; name: string; modified: number } | null> {
   if (!inTauri) {
     browserDownload(suggestedName, content);
-    return { path: null, name: suggestedName };
+    return { path: null, name: suggestedName, modified: 0 };
   }
   const target =
     path ?? (await save({ defaultPath: suggestedName, filters: MARKDOWN_FILTERS }));
   if (!target) return null;
-  await invoke('write_text_file', { path: target, contents: content });
-  return { path: target, name: baseName(target) };
+  const modified = await invoke<number>('write_text_file', { path: target, contents: content, ...format });
+  return { path: target, name: baseName(target), modified };
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +206,13 @@ export async function openThemeFolder(): Promise<void> {
 /** The file passed on the command line, e.g. via "Open with" in Explorer. */
 export async function initialFilePath(): Promise<string | null> {
   return inTauri ? invoke<string | null>('initial_file') : null;
+}
+
+/** The file was changed by another program while it had unsaved edits here. */
+export async function askReloadChangedFile(docName: string): Promise<boolean> {
+  const question = `"${docName}" was changed by another program.\n\nReload it and lose your changes here?`;
+  if (!inTauri) return confirm(question);
+  return ask(question, { title: 'File changed', kind: 'warning', okLabel: 'Reload', cancelLabel: 'Keep Mine' });
 }
 
 export async function askUnsavedChanges(docName: string): Promise<UnsavedChoice> {
@@ -309,7 +349,9 @@ function browserPickFile(): Promise<OpenedFile | null> {
     input.accept = '.md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain';
     input.onchange = async () => {
       const file = input.files?.[0];
-      resolvePromise(file ? { path: null, name: file.name, content: await file.text() } : null);
+      resolvePromise(
+        file ? { path: null, name: file.name, content: await file.text(), format: DEFAULT_FORMAT, modified: 0 } : null,
+      );
     };
     input.oncancel = () => resolvePromise(null);
     input.click();
