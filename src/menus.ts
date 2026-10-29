@@ -9,6 +9,8 @@ export interface MenuState {
   autoSave: boolean;
   sourceMode: boolean;
   darkTheme: boolean;
+  /** The sidebar panel showing, or null when the sidebar is closed. */
+  sidebar: 'files' | 'outline' | null;
   openRecent(path: string): void;
   clearRecent(): void;
 }
@@ -32,6 +34,8 @@ export function buildMenus(state: () => MenuState): Menu[] {
         return [
           { label: 'New', command: 'new' },
           { label: 'Open…', command: 'open' },
+          { label: 'Open Folder…', command: 'open-folder' },
+          { label: 'Quick Open…', command: 'quick-open' },
           { label: 'Open Recent', items: recent },
           'separator',
           { label: 'Save', command: 'save' },
@@ -100,9 +104,13 @@ export function buildMenus(state: () => MenuState): Menu[] {
     {
       label: 'View',
       items: () => {
-        const { sourceMode, darkTheme } = state();
+        const { sourceMode, darkTheme, sidebar } = state();
         return [
           { label: 'Source Mode', command: 'toggle-source', checked: sourceMode },
+          'separator',
+          { label: 'Sidebar', command: 'toggle-sidebar', checked: sidebar !== null },
+          { label: 'Outline', command: 'show-outline', checked: sidebar === 'outline' },
+          { label: 'Files', command: 'show-files', checked: sidebar === 'files' },
           'separator',
           { label: 'Dark Theme', command: 'toggle-theme', checked: darkTheme },
         ];

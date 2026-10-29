@@ -24,7 +24,7 @@ import {
 } from '@milkdown/kit/preset/commonmark';
 import { insertTableCommand, toggleStrikethroughCommand } from '@milkdown/kit/preset/gfm';
 import { Fragment, Slice, type Node as ProseNode } from '@milkdown/kit/prose/model';
-import { AllSelection } from '@milkdown/kit/prose/state';
+import { AllSelection, TextSelection } from '@milkdown/kit/prose/state';
 import { $remark, callCommand } from '@milkdown/kit/utils';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
@@ -47,9 +47,20 @@ export interface EditorOptions {
   uploadImage: (file: File) => Promise<string>;
 }
 
+export interface Heading {
+  level: number;
+  text: string;
+}
+
 export interface MarkdownEditor {
   readonly mode: EditorMode;
   getMarkdown(): string;
+  /** The document's headings, for the outline. */
+  headings(): Heading[];
+  /** Scroll heading `index` to the top and put the cursor there. */
+  revealHeading(index: number): void;
+  /** The heading whose section is at the top of `scroller`, or -1. */
+  currentHeading(scroller: HTMLElement): number;
   /**
    * Run an editing command such as "bold" or "heading-2" (see `textCommands`
    * in keymap.ts). `arg` is the URL for "link", { src, alt } for "image" and
@@ -243,9 +254,30 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     },
   };
 
+  const headingElements = () => [...view.dom.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')];
+
   return {
     mode: 'wysiwyg',
     getMarkdown: () => (preserver ? preserver.markdown(view.state.doc) : crepe.getMarkdown()),
+    headings: () =>
+      headingElements().map((el) => ({ level: Number(el.tagName[1]), text: el.textContent?.trim() ?? '' })),
+    revealHeading: (index) => {
+      const el = headingElements()[index];
+      if (!el) return;
+      const pos = view.posAtDOM(el, 0);
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
+      view.focus();
+      el.scrollIntoView({ block: 'start' });
+    },
+    currentHeading: (scroller) => {
+      // A heading near the top of the view counts as the one being read.
+      const top = scroller.getBoundingClientRect().top + Math.min(120, scroller.clientHeight / 4);
+      let current = -1;
+      headingElements().forEach((el, i) => {
+        if (el.getBoundingClientRect().top <= top) current = i;
+      });
+      return current;
+    },
     run: (command, arg) => {
       const action = commands[command];
       if (!action) return false;
@@ -332,9 +364,54 @@ function createSourceEditor(options: EditorOptions): MarkdownEditor {
     },
   };
 
+  /** Headings with the line they start on. */
+  const sourceHeadings = () => {
+    const lines = textarea.value.split('\n');
+    const found: (Heading & { line: number })[] = [];
+    let fence: string | null = null;
+    lines.forEach((line, i) => {
+      const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+      if (fence) {
+        if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+        return;
+      }
+      if (marker) {
+        fence = marker;
+        return;
+      }
+      const atx = /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/.exec(line);
+      if (atx) found.push({ level: atx[1].length, text: atx[2], line: i });
+      const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+      const previous = lines[i - 1] ?? '';
+      if (underline && /\S/.test(previous) && !/^ {0,3}([-*+>#]|\d+[.)])/.test(previous)) {
+        found.push({ level: underline[1][0] === '=' ? 1 : 2, text: previous.trim(), line: i - 1 });
+      }
+    });
+    return found;
+  };
+  const lineCount = () => textarea.value.split('\n').length;
+
   return {
     mode: 'source',
     getMarkdown: () => textarea.value,
+    headings: () => sourceHeadings().map(({ level, text }) => ({ level, text })),
+    revealHeading: (index) => {
+      const heading = sourceHeadings()[index];
+      if (!heading) return;
+      const offset = textarea.value.split('\n').slice(0, heading.line).join('\n').length + (heading.line ? 1 : 0);
+      textarea.focus();
+      textarea.setSelectionRange(offset, offset);
+      // Lines can wrap, so this is close rather than exact.
+      textarea.scrollTop = (heading.line / lineCount()) * textarea.scrollHeight;
+    },
+    currentHeading: () => {
+      const topLine = (textarea.scrollTop / Math.max(1, textarea.scrollHeight)) * lineCount();
+      let current = -1;
+      sourceHeadings().forEach((heading, i) => {
+        if (heading.line <= topLine + 1) current = i;
+      });
+      return current;
+    },
     run: (command, arg) => {
       const action = commands[command];
       if (!action) return false;

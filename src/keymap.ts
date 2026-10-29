@@ -6,6 +6,7 @@ export const keymap: Record<string, string> = {
   // File
   'Mod+N': 'new',
   'Mod+O': 'open',
+  'Mod+P': 'quick-open',
   'Mod+S': 'save',
   'Mod+Shift+S': 'save-as',
   'Mod+W': 'close',
@@ -43,6 +44,9 @@ export const keymap: Record<string, string> = {
   'Mod+\\': 'clear-format',
   // View
   'Mod+/': 'toggle-source',
+  'Mod+Shift+L': 'toggle-sidebar',
+  'Mod+Shift+1': 'show-outline',
+  'Mod+Shift+3': 'show-files',
 };
 
 /**

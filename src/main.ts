@@ -27,6 +27,11 @@ const app = new App({
     replaceOne: byId('replace-one'),
     replaceAll: byId('replace-all'),
   },
+  sidebar: {
+    sidebar: byId('sidebar'),
+    tabs: { files: byId('tab-files'), outline: byId('tab-outline') },
+    panels: { files: byId('files-panel'), outline: byId('outline-panel') },
+  },
 });
 
 void app.start();

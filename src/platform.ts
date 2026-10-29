@@ -64,6 +64,36 @@ export async function writeFile(
   return { path: target, name: baseName(target) };
 }
 
+// ---------------------------------------------------------------------------
+// Folders (the sidebar's file tree and Quick Open)
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+}
+
+/** Folders and Markdown files in `path`, folders first. */
+export async function listDir(path: string): Promise<DirEntry[]> {
+  return inTauri ? invoke<DirEntry[]>('list_dir', { path }) : [];
+}
+
+/** Markdown files anywhere under `root`. */
+export async function findMarkdownFiles(root: string, limit = 5000): Promise<string[]> {
+  return inTauri ? invoke<string[]>('find_markdown_files', { root, limit }) : [];
+}
+
+export async function pickFolder(): Promise<string | null> {
+  if (!inTauri) return null;
+  const path = await open({ directory: true, multiple: false });
+  return typeof path === 'string' ? path : null;
+}
+
+/** "C:\notes\a.md" → "C:\notes" */
+export function folderOf(path: string): string {
+  return path.replace(/[\\/][^\\/]*$/, '');
+}
+
 /** The file passed on the command line, e.g. via "Open with" in Explorer. */
 export async function initialFilePath(): Promise<string | null> {
   return inTauri ? invoke<string | null>('initial_file') : null;

@@ -13,6 +13,15 @@
         <span id="dirty-mark" title="Unsaved changes" hidden>●</span>
       </div>
     </header>
+    <div class="workspace">
+    <aside class="sidebar" id="sidebar" hidden>
+      <div class="sidebar-tabs">
+        <button id="tab-files" title="Files (Ctrl+Shift+3)">Files</button>
+        <button id="tab-outline" title="Outline (Ctrl+Shift+1)">Outline</button>
+      </div>
+      <div class="sidebar-panel" id="files-panel"></div>
+      <div class="sidebar-panel" id="outline-panel"></div>
+    </aside>
     <div class="editor-area">
       <main id="editor-host"></main>
       <div class="find-bar" id="find-bar" hidden>
@@ -30,6 +39,7 @@
           <button id="replace-all" title="Replace every match">All</button>
         </div>
       </div>
+    </div>
     </div>
     <footer class="statusbar">
       <span id="status-mode">Live preview</span>

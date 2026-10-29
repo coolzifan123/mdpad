@@ -3,19 +3,25 @@
 
 import { askText } from './dialog';
 import { createEditor, type EditorMode, type MarkdownEditor } from './editor';
+import { FileTree } from './file-tree';
 import { FindBar, type FindBarElements } from './find-bar';
 import { isReloadKey, keymap, shortcutFor, textCommands } from './keymap';
 import { detectLineEnding, toLf, withLineEnding, type LineEnding } from './markdown-style';
 import { MenuBar } from './menu';
 import { buildMenus } from './menus';
+import { Outline } from './outline';
 import * as platform from './platform';
+import { quickOpen } from './quick-open';
 import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
+import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
 import { toggleTheme } from './theme';
 import { countText } from './wordcount';
 
 const APP_NAME = 'MdPad';
 const UNTITLED = 'Untitled.md';
 const AUTO_SAVE_KEY = 'mdpad-autosave';
+/** The folder chosen with File > Open Folder. */
+const FOLDER_KEY = 'mdpad-folder';
 /** Auto save waits this long after the last change. */
 const AUTO_SAVE_DELAY = 1500;
 
@@ -38,6 +44,7 @@ export interface AppElements {
   statusMode: HTMLElement;
   statusCount: HTMLElement;
   findBar: FindBarElements;
+  sidebar: SidebarElements;
 }
 
 export class App {
@@ -63,6 +70,11 @@ export class App {
   private autoSave = loadFlag(AUTO_SAVE_KEY);
   private autoSaveTimer: number | undefined;
   private readonly findBar: FindBar;
+  private readonly sidebar: Sidebar;
+  private readonly outline: Outline;
+  private readonly fileTree: FileTree;
+  /** When a heading in the outline was last clicked. */
+  private outlineJumpTime = 0;
 
   /** Add new commands here, then bind them in keymap.ts or menus.ts. */
   private readonly commands: Record<string, () => unknown> = {
@@ -74,6 +86,11 @@ export class App {
     'toggle-autosave': () => this.toggleAutoSave(),
     'toggle-source': () => this.toggleSource(),
     'toggle-theme': () => toggleTheme(),
+    'toggle-sidebar': () => this.sidebar.toggle(),
+    'show-outline': () => this.sidebar.toggleTab('outline'),
+    'show-files': () => this.sidebar.toggleTab('files'),
+    'open-folder': () => this.openFolder(),
+    'quick-open': () => this.quickOpen(),
     find: () => this.findBar.open(false),
     replace: () => this.findBar.open(true),
     'find-next': () => this.findBar.step(1),
@@ -100,6 +117,19 @@ export class App {
       () => this.editor?.searcher ?? null,
       () => this.editor?.focus(),
     );
+    this.outline = new Outline(ui.sidebar.panels.outline, (index) => {
+      // Keep the clicked heading highlighted, even near the end of the
+      // document where it can't scroll to the top.
+      this.outlineJumpTime = Date.now();
+      this.editor?.revealHeading(index);
+      this.outline.setCurrent(index);
+    });
+    this.fileTree = new FileTree(
+      ui.sidebar.panels.files,
+      (path) => void this.run(() => this.openPath(path)),
+      () => void this.run(() => this.openFolder()),
+    );
+    this.sidebar = new Sidebar(ui.sidebar, (tab) => this.fillSidebar(tab));
     new MenuBar(
       ui.menuBar,
       buildMenus(() => ({
@@ -107,6 +137,7 @@ export class App {
         autoSave: this.autoSave,
         sourceMode: this.mode === 'source',
         darkTheme: document.documentElement.dataset.theme === 'dark',
+        sidebar: this.sidebar.visible ? this.sidebar.activeTab : null,
         openRecent: (path) => void this.run(() => this.openPath(path)),
         clearRecent: clearRecentFiles,
       })),
@@ -182,7 +213,12 @@ export class App {
 
     if (markdown !== null) this.cleanSnapshot = markdown;
     this.doc = { path: written.path, name: written.name, savedText: text, lineEnding, dirty: false };
-    if (written.path) addRecentFile(written.path);
+    if (written.path) {
+      addRecentFile(written.path);
+      // A new file may need to appear in the file tree.
+      if (saveAs) await this.fileTree.render();
+      this.fileTree.setCurrent(written.path);
+    }
     this.updateUi();
     return true;
   }
@@ -223,6 +259,38 @@ export class App {
     this.editor?.run(plain ? 'paste-plain' : 'paste', text);
   }
 
+  private async openFolder(): Promise<void> {
+    const folder = await platform.pickFolder();
+    if (!folder) return;
+    saveText(FOLDER_KEY, folder);
+    await this.fileTree.setRoot(folder);
+    this.sidebar.show('files');
+  }
+
+  private async quickOpen(): Promise<void> {
+    const folder = this.fileTree.folder;
+    const candidates = (async () => ({
+      recent: recentFiles(),
+      folder,
+      files: folder ? await platform.findMarkdownFiles(folder) : [],
+    }))();
+    const path = await quickOpen(candidates);
+    if (path) await this.openPath(path);
+    else this.editor?.focus();
+  }
+
+  /** Fill the sidebar panel that is about to show. */
+  private fillSidebar(tab: SidebarTab): void {
+    if (tab === 'outline') this.updateOutline();
+    else void this.fileTree.render();
+  }
+
+  private updateOutline(): void {
+    if (!this.editor || !this.sidebar.visible || this.sidebar.activeTab !== 'outline') return;
+    this.outline.render(this.editor.headings());
+    this.outline.setCurrent(this.editor.currentHeading(this.ui.host));
+  }
+
   private async insertLink(): Promise<void> {
     const href = await askText('Link address', { placeholder: 'https://' });
     this.editor?.focus();
@@ -248,6 +316,9 @@ export class App {
     };
     if (file.path) addRecentFile(file.path);
     await this.mountEditor(toLf(file.content));
+    // The file tree shows the chosen folder, or else the file's own folder.
+    await this.fileTree.setRoot(loadText(FOLDER_KEY) ?? (file.path ? platform.folderOf(file.path) : null));
+    this.fileTree.setCurrent(file.path);
   }
 
   private async mountEditor(markdown: string): Promise<void> {
@@ -291,6 +362,7 @@ export class App {
     }
     this.updateWordCount(markdown);
     this.scheduleAutoSave();
+    this.updateOutline();
   }
 
   // -------------------------------------------------------------------------
@@ -314,6 +386,24 @@ export class App {
         event.preventDefault();
         event.stopPropagation();
         void this.run(command);
+      },
+      true,
+    );
+
+    // Highlight the heading being read. Capture: the source textarea scrolls
+    // itself, and scroll events don't bubble.
+    let scrollQueued = false;
+    this.ui.host.addEventListener(
+      'scroll',
+      () => {
+        if (scrollQueued) return;
+        scrollQueued = true;
+        setTimeout(() => {
+          scrollQueued = false;
+          // Skip the scroll caused by clicking a heading in the outline.
+          if (Date.now() - this.outlineJumpTime < 300) return;
+          if (this.editor && this.sidebar.visible) this.outline.setCurrent(this.editor.currentHeading(this.ui.host));
+        }, 50);
       },
       true,
     );
@@ -355,18 +445,21 @@ export class App {
   }
 }
 
-function loadFlag(key: string): boolean {
+function loadText(key: string): string | null {
   try {
-    return localStorage.getItem(key) === 'true';
+    return localStorage.getItem(key);
   } catch {
-    return false;
+    return null;
   }
 }
 
-function saveFlag(key: string, value: boolean): void {
+function saveText(key: string, value: string): void {
   try {
-    localStorage.setItem(key, String(value));
+    localStorage.setItem(key, value);
   } catch {
     // Not critical.
   }
 }
+
+const loadFlag = (key: string) => loadText(key) === 'true';
+const saveFlag = (key: string, value: boolean) => saveText(key, String(value));
