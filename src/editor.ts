@@ -11,6 +11,7 @@ import { upload, uploadConfig, type Uploader } from '@milkdown/kit/plugin/upload
 import { $remark } from '@milkdown/kit/utils';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
+import { imageHandler, useImageBlocks } from './image-blocks';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
 
@@ -56,6 +57,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     },
     featureConfigs: {
       [Crepe.Feature.Placeholder]: { text: 'Start writing…', mode: 'doc' },
+      // Math blocks show only the formula until you click them.
+      [Crepe.Feature.CodeMirror]: { previewOnlyByDefault: true },
       [Crepe.Feature.ImageBlock]: {
         proxyDomURL: options.resolveImage,
         onUpload: options.uploadImage,
@@ -90,11 +93,12 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       ctx.update(remarkStringifyOptionsCtx, (current) => ({
         ...current,
         ...style,
-        handlers: { ...current.handlers, ...style.handlers },
+        handlers: { ...current.handlers, image: imageHandler, ...style.handlers },
       }));
     })
     .use(upload)
     .use(keepFileTree);
+  await useImageBlocks(crepe.editor);
 
   let destroyed = false;
   crepe.on((events) => {

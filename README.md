@@ -85,6 +85,7 @@ src/                     Frontend (TypeScript, runs in the webview)
   app.ts                 Document state, commands (new/open/save/...), UI updates
   editor.ts              The two editors: live preview (Crepe) and source (textarea)
   preserve.ts            Saving without reformatting: unedited blocks are copied from the file
+  image-blocks.ts        Which images become resizable blocks (keeps image descriptions)
   markdown-style.ts      Line endings, and each file's Markdown style for rewritten blocks
   platform.ts            Files, dialogs, window title, images (Tauri + browser fallback)
   keymap.ts              Keyboard shortcuts
@@ -124,8 +125,11 @@ examples/welcome.md      A sample document
   the file's own style (bullet character, `---` rules, ...), but small things
   can still change in that block: tables get padded columns, and an empty
   paragraph is written as `<br />`. Source mode saves exactly what you typed.
-- Math blocks show the LaTeX source above the rendered preview.
+- An image on a line of its own can be resized only if it has no
+  description (`![](photo.png)`). Images with a description
+  (`![A cat](cat.png)`) stay normal images, because a resizable image stores
+  its size where the description would go.
 - Only UTF-8 files can be opened.
 - Dragging a file onto the window doesn't open it yet; use `Ctrl+O`.
 - Not yet: outline sidebar, file tree, find and replace, Mermaid diagrams,
-  export to PDF/HTML, file associations, auto-save.
+  export to PDF/HTML, auto-save.
