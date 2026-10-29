@@ -91,6 +91,8 @@ export class App {
     'show-files': () => this.sidebar.toggleTab('files'),
     'open-folder': () => this.openFolder(),
     'quick-open': () => this.quickOpen(),
+    'export-html': () => this.exportHtml(),
+    print: () => this.print(),
     find: () => this.findBar.open(false),
     replace: () => this.findBar.open(true),
     'find-next': () => this.findBar.step(1),
@@ -277,6 +279,42 @@ export class App {
     const path = await quickOpen(candidates);
     if (path) await this.openPath(path);
     else this.editor?.focus();
+  }
+
+  /** The document as a stand-alone HTML page. */
+  private async htmlPage(forPrinting: boolean): Promise<string> {
+    const { toHtmlPage } = await import('./export');
+    return toHtmlPage(this.editor?.getMarkdown() ?? '', {
+      title: this.doc.name.replace(/\.[^.]+$/, ''),
+      // A printed page loads images through the app; an exported file keeps
+      // the addresses from the Markdown, which work next to the document.
+      resolveImage: forPrinting ? (src) => platform.resolveImageSrc(src, this.doc.path) : undefined,
+    });
+  }
+
+  private async exportHtml(): Promise<void> {
+    const html = await this.htmlPage(false);
+    const name = this.doc.name.replace(/\.[^.]+$/, '') + '.html';
+    await platform.exportFile(name, html, { name: 'HTML', extensions: ['html', 'htm'] }, this.doc.path);
+    this.editor?.focus();
+  }
+
+  /** Prints the exported page, not the editor. "Save as PDF" is a printer. */
+  private async print(): Promise<void> {
+    const frame = document.createElement('iframe');
+    frame.className = 'print-frame';
+    // The document's own HTML must not run scripts inside the app.
+    frame.setAttribute('sandbox', 'allow-same-origin allow-modals');
+    frame.srcdoc = await this.htmlPage(true);
+    const loaded = new Promise((resolveLoad) => (frame.onload = resolveLoad));
+    document.body.append(frame);
+    await loaded;
+    const page = frame.contentWindow!;
+    const images = [...page.document.images].filter((img) => !img.complete);
+    await Promise.all(images.map((img) => new Promise((done) => (img.onload = img.onerror = done))));
+    page.addEventListener('afterprint', () => frame.remove());
+    page.focus();
+    page.print();
   }
 
   /** Fill the sidebar panel that is about to show. */

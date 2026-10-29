@@ -431,6 +431,16 @@ body {
   background: rgba(255, 140, 0, 0.65);
 }
 
+/* Holds the page being printed; never seen on screen. */
+.print-frame {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border: 0;
+}
+
 /* --- Dialog ------------------------------------------------------------- */
 
 .dialog-backdrop {

@@ -100,6 +100,27 @@ export function isInside(path: string, folder: string): boolean {
   return normal(path).startsWith(normal(folder) + '\\');
 }
 
+/**
+ * Ask where to save an exported file (next to `nearPath` by default) and
+ * write it. Resolves the path, or null if cancelled.
+ */
+export async function exportFile(
+  name: string,
+  content: string,
+  filter: { name: string; extensions: string[] },
+  nearPath: string | null,
+): Promise<string | null> {
+  if (!inTauri) {
+    browserDownload(name, content, 'text/html');
+    return name;
+  }
+  const defaultPath = nearPath ? await resolve(await dirname(nearPath), name) : name;
+  const target = await save({ defaultPath, filters: [filter] });
+  if (!target) return null;
+  await invoke('write_text_file', { path: target, contents: content });
+  return target;
+}
+
 /** The file passed on the command line, e.g. via "Open with" in Explorer. */
 export async function initialFilePath(): Promise<string | null> {
   return inTauri ? invoke<string | null>('initial_file') : null;
@@ -257,8 +278,8 @@ function browserPickImage(): Promise<File | null> {
   });
 }
 
-function browserDownload(name: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
+function browserDownload(name: string, content: string, type = 'text/markdown'): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;

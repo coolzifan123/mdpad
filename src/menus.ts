@@ -42,6 +42,16 @@ export function buildMenus(state: () => MenuState): Menu[] {
           { label: 'Save As…', command: 'save-as' },
           { label: 'Auto Save', command: 'toggle-autosave', checked: autoSave },
           'separator',
+          {
+            label: 'Export',
+            items: [
+              { label: 'HTML…', command: 'export-html' },
+              // The print dialog's "Save as PDF" printer makes the PDF.
+              { label: 'PDF…', command: 'print' },
+            ],
+          },
+          { label: 'Print…', command: 'print' },
+          'separator',
           { label: 'Close', command: 'close' },
         ];
       },

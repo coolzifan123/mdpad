@@ -9,6 +9,7 @@ export const keymap: Record<string, string> = {
   'Mod+P': 'quick-open',
   'Mod+S': 'save',
   'Mod+Shift+S': 'save-as',
+  'Mod+Shift+P': 'print',
   'Mod+W': 'close',
   // Edit
   'Mod+Z': 'undo',
