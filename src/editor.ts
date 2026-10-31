@@ -352,7 +352,12 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     mode: 'wysiwyg',
     getMarkdown: () => (preserver ? preserver.markdown(view.state.doc) : crepe.getMarkdown()),
     headings: () =>
-      headingElements().map((el) => ({ level: Number(el.tagName[1]), text: el.textContent?.trim() ?? '' })),
+      // The text from the document, not the screen: the screen also has the
+      // "## " shown at the cursor (markers.ts).
+      headingElements().map((el) => ({
+        level: Number(el.tagName[1]),
+        text: view.state.doc.resolve(view.posAtDOM(el, 0)).parent.textContent.trim(),
+      })),
     revealHeading: (index) => {
       const el = headingElements()[index];
       if (!el) return;
