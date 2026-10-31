@@ -9,8 +9,9 @@ import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
-import remarkRehype from 'remark-rehype';
+import remarkRehype, { type Options as RehypeOptions } from 'remark-rehype';
 import { unified } from 'unified';
+import { remarkHighlight } from './highlight';
 
 export interface PageOptions {
   title: string;
@@ -25,7 +26,8 @@ export async function toHtmlPage(markdown: string, { title, resolveImage }: Page
     .use(remarkFrontmatter, ['yaml'])
     .use(remarkGfm)
     .use(remarkMath)
-    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(remarkHighlight)
+    .use(remarkRehype, { allowDangerousHtml: true, handlers: { highlight: toMark } as RehypeOptions['handlers'] })
     .use(rehypeKatex, { output: 'mathml' })
     .use(() => (tree: HtmlNode) => renderDiagrams(tree))
     .use(rehypeHighlight)
@@ -49,6 +51,11 @@ export async function toHtmlPage(markdown: string, { title, resolveImage }: Page
     '</html>',
     '',
   ].join('\n');
+}
+
+/** ==text== becomes <mark>text</mark>. */
+function toMark(state: { all: (node: unknown) => unknown[] }, node: unknown) {
+  return { type: 'element', tagName: 'mark', properties: {}, children: state.all(node) };
 }
 
 interface HtmlNode {
@@ -136,6 +143,7 @@ th, td { padding: 6px 13px; border: 1px solid #d0d7de; }
 th { background: #f6f8fa; font-weight: 600; }
 tr:nth-child(2n) td { background: #fafbfc; }
 math[display="block"] { margin: 1em 0; overflow-x: auto; }
+mark { padding: 0 2px; border-radius: 2px; background: #fff3a3; color: inherit; }
 .diagram { margin: 1em 0; text-align: center; }
 .diagram svg { max-width: 100%; height: auto; }
 .hljs-comment, .hljs-quote { color: #6e7781; font-style: italic; }

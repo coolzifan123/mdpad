@@ -63,6 +63,9 @@ export function buildMenus(state: () => MenuState): Menu[] {
           { label: 'Print…', command: 'print' },
           'separator',
           { label: 'Reveal in File Explorer', command: 'reveal-file', disabled: !hasPath },
+          'separator',
+          { label: 'Preferences…', command: 'preferences' },
+          'separator',
           { label: 'Close', command: 'close' },
         ];
       },
@@ -116,6 +119,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
         { label: 'Bold', command: 'bold' },
         { label: 'Italic', command: 'italic' },
         { label: 'Strikethrough', command: 'strikethrough' },
+        { label: 'Highlight', command: 'highlight' },
         { label: 'Inline Code', command: 'inline-code' },
         'separator',
         { label: 'Link…', command: 'link' },

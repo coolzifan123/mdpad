@@ -12,6 +12,7 @@ export const keymap: Record<string, string> = {
   'Mod+Shift+S': 'save-as',
   'Mod+Shift+P': 'print',
   'Mod+W': 'close',
+  'Mod+,': 'preferences',
   // Edit
   'Mod+Z': 'undo',
   'Mod+Y': 'redo',
@@ -43,6 +44,7 @@ export const keymap: Record<string, string> = {
   'Mod+I': 'italic',
   'Mod+Shift+`': 'inline-code',
   'Alt+Shift+5': 'strikethrough',
+  'Mod+Shift+H': 'highlight',
   'Mod+K': 'link',
   'Mod+Shift+I': 'image',
   'Mod+\\': 'clear-format',
@@ -88,6 +90,7 @@ export const textCommands = new Set([
   'italic',
   'inline-code',
   'strikethrough',
+  'highlight',
   'link',
   'image',
   'clear-format',
@@ -130,6 +133,7 @@ function keyName(event: KeyboardEvent): string | null {
     Backslash: '\\',
     Equal: '=',
     Minus: '-',
+    Comma: ',',
   };
   if (symbols[code]) return symbols[code];
   if (/^F\d+$/.test(event.key)) return event.key;

@@ -12,11 +12,11 @@ export type LineEnding = '\n' | '\r\n';
 /** For new files, like Notepad and VS Code do. */
 export const systemLineEnding: LineEnding = /Win/.test(navigator.platform) ? '\r\n' : '\n';
 
-/** The line ending most lines of `text` use. */
-export function detectLineEnding(text: string): LineEnding {
+/** The line ending most lines of `text` use; `fallback` if it has none. */
+export function detectLineEnding(text: string, fallback: LineEnding = systemLineEnding): LineEnding {
   const crlf = text.split('\r\n').length - 1;
   const lf = text.split('\n').length - 1 - crlf;
-  if (crlf === 0 && lf === 0) return systemLineEnding;
+  if (crlf === 0 && lf === 0) return fallback;
   return crlf > lf ? '\r\n' : '\n';
 }
 

@@ -6,7 +6,7 @@ import { createEditor, type EditorMode, type MarkdownEditor } from './editor';
 import { FileTree } from './file-tree';
 import { FindBar, type FindBarElements } from './find-bar';
 import { isReloadKey, keymap, shortcutFor, textCommands } from './keymap';
-import { detectLineEnding, toLf, withLineEnding, type LineEnding } from './markdown-style';
+import { detectLineEnding, systemLineEnding, toLf, withLineEnding, type LineEnding } from './markdown-style';
 import { MenuBar } from './menu';
 import { buildMenus } from './menus';
 import { Outline } from './outline';
@@ -14,7 +14,8 @@ import * as platform from './platform';
 import { quickOpen } from './quick-open';
 import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
 import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
-import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, toggleTheme } from './theme';
+import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
+import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
 import { writingModes } from './writing-modes';
 import { countText } from './wordcount';
 
@@ -96,6 +97,8 @@ export class App {
   private view: ViewSettings = loadView();
   /** The .css files in the theme folder (View > Theme). */
   private themes: string[] = [];
+  /** Settings from the Preferences window. */
+  private prefs: Preferences = loadPreferences();
 
   /** Add new commands here, then bind them in keymap.ts or menus.ts. */
   private readonly commands: Record<string, () => unknown> = {
@@ -117,6 +120,7 @@ export class App {
     'zoom-reset': () => this.setView({ zoom: 1 }),
     'open-theme-folder': () => platform.openThemeFolder(),
     'reveal-file': () => this.doc.path && platform.revealInExplorer(this.doc.path),
+    preferences: () => this.openPreferences(),
     'toggle-sidebar': () => this.sidebar.toggle(),
     'show-outline': () => this.sidebar.toggleTab('outline'),
     'show-files': () => this.sidebar.toggleTab('files'),
@@ -188,6 +192,7 @@ export class App {
   async start(): Promise<void> {
     this.bindEvents();
     this.setView({});
+    applyLayout(this.prefs);
     await this.loadThemes();
     const initialPath = await platform.initialFilePath();
     if (initialPath) {
@@ -347,6 +352,92 @@ export class App {
     }
   }
 
+  private openPreferences(): Promise<void> {
+    const set = (change: Partial<Preferences>) => {
+      this.prefs = { ...this.prefs, ...change };
+      savePreferences(this.prefs);
+      applyLayout(this.prefs);
+      this.applySpellcheck();
+    };
+    return showPreferences([
+      {
+        title: 'Appearance',
+        fields: [
+          {
+            kind: 'select',
+            label: 'Theme',
+            value: themeChoice(),
+            options: [
+              ['system', 'Same as Windows'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ],
+            onChange: (value) => setThemeChoice(value as ThemeChoice),
+          },
+          {
+            kind: 'select',
+            label: 'Custom theme',
+            value: savedCustomTheme() ?? '',
+            options: [['', 'None'], ...this.themes.map((name): [string, string] => [name, name.replace(/\.css$/i, '')])],
+            onChange: (value) => void applyCustomTheme(value || null, platform.readTheme),
+          },
+          { kind: 'number', label: 'Font size', value: this.prefs.fontSize, min: 10, max: 32, unit: 'px', onChange: (fontSize) => set({ fontSize }) },
+          { kind: 'number', label: 'Text width', value: this.prefs.editorWidth, min: 500, max: 2400, step: 20, unit: 'px', onChange: (editorWidth) => set({ editorWidth }) },
+        ],
+      },
+      {
+        title: 'Editor',
+        fields: [
+          { kind: 'checkbox', label: 'Check spelling', value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
+          { kind: 'checkbox', label: 'Show Markdown symbols at the cursor', value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
+          { kind: 'checkbox', label: 'Focus mode', value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
+          { kind: 'checkbox', label: 'Typewriter mode', value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
+        ],
+      },
+      {
+        title: 'Files',
+        fields: [
+          {
+            kind: 'checkbox',
+            label: 'Save automatically',
+            value: this.autoSave,
+            onChange: (on) => {
+              if (on !== this.autoSave) this.toggleAutoSave();
+            },
+          },
+          {
+            kind: 'text',
+            label: 'Folder for pasted images',
+            value: this.prefs.imageFolder,
+            hint: 'assets',
+            onChange: (imageFolder) => set({ imageFolder: imageFolder.replace(/^[\\/]+|[\\/]+$/g, '') || 'assets' }),
+          },
+          {
+            kind: 'select',
+            label: 'Line endings for new files',
+            value: this.prefs.newFileLineEnding,
+            options: [
+              ['system', 'Same as Windows (CRLF)'],
+              ['crlf', 'CRLF'],
+              ['lf', 'LF'],
+            ],
+            onChange: (value) => set({ newFileLineEnding: value as Preferences['newFileLineEnding'] }),
+          },
+        ],
+      },
+    ]).then(() => this.editor?.focus());
+  }
+
+  private newFileLineEnding(): LineEnding {
+    const choice = this.prefs.newFileLineEnding;
+    return choice === 'lf' ? '\n' : choice === 'crlf' ? '\r\n' : systemLineEnding;
+  }
+
+  /** The browser's spell checker underlines misspelled words. */
+  private applySpellcheck(): void {
+    this.ui.host.querySelector('.ProseMirror, .source-editor')?.setAttribute('spellcheck', String(this.prefs.spellcheck));
+  }
+
   /** Change and remember view settings, and show them. */
   private setView(change: Partial<ViewSettings>): void {
     this.view = { ...this.view, ...change };
@@ -448,7 +539,7 @@ export class App {
   }
 
   private async insertImage(): Promise<void> {
-    const image = await platform.pickImage(this.doc.path);
+    const image = await platform.pickImage(this.doc.path, this.prefs.imageFolder);
     this.editor?.focus();
     if (image) this.editor?.run('image', image);
   }
@@ -461,7 +552,7 @@ export class App {
       path: file.path,
       name: file.name,
       savedText: file.content,
-      lineEnding: detectLineEnding(file.content),
+      lineEnding: detectLineEnding(file.content, this.newFileLineEnding()),
       format: file.format,
       modified: file.modified,
       dirty: false,
@@ -486,7 +577,7 @@ export class App {
       markdown,
       onChange: () => this.refreshDirty(),
       resolveImage: (src) => platform.resolveImageSrc(src, this.doc.path),
-      uploadImage: (file) => platform.storeImage(file, this.doc.path),
+      uploadImage: (file) => platform.storeImage(file, this.doc.path, this.prefs.imageFolder),
       openLink: (href) => void this.run(() => this.openLink(href)),
     });
     this.editor = editor;
@@ -495,6 +586,7 @@ export class App {
 
     this.refreshDirty();
     this.updateUi();
+    this.applySpellcheck();
     if (this.findBar.isOpen) this.findBar.refresh();
     else editor.focus();
   }

@@ -489,6 +489,69 @@ body {
   border-color: var(--app-accent);
 }
 
+/* Preferences */
+.dialog.preferences {
+  width: min(520px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  gap: 4px;
+}
+
+.dialog.preferences h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.dialog.preferences h3 {
+  margin: 12px 0 6px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dialog .pref-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-weight: normal;
+}
+
+.pref-row .pref-label {
+  flex: 1;
+}
+
+.pref-checkbox .pref-label {
+  flex: 1;
+  order: 2;
+}
+
+.pref-row select,
+.pref-row input[type='text'],
+.pref-row input[type='number'] {
+  width: 190px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  outline: none;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font: inherit;
+}
+
+.pref-row input[type='number'] {
+  width: 90px;
+}
+
+.pref-unit {
+  width: 90px;
+  color: var(--app-fg-muted);
+}
+
 .dialog-buttons {
   display: flex;
   justify-content: flex-end;
@@ -540,7 +603,7 @@ body {
   background: transparent;
   color: var(--app-fg);
   font-family: var(--app-font-code);
-  font-size: 14px;
+  font-size: calc(var(--editor-font-size, 16px) * 0.875);
   line-height: 1.7;
   tab-size: 4;
 }
@@ -583,6 +646,18 @@ body {
 
 .milkdown .ProseMirror dl[data-type='footnote_definition'] dd p {
   margin: 0;
+}
+
+/* ==highlight== */
+.milkdown .ProseMirror mark.highlight {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: #fff3a3;
+  color: inherit;
+}
+
+:root[data-theme='dark'] .milkdown .ProseMirror mark.highlight {
+  background: #6b5d1e;
 }
 
 /* "**", "##"… shown around the formatting at the cursor (markers.ts). */

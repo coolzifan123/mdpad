@@ -220,29 +220,35 @@ fn is_markdown(name: &str) -> bool {
         .any(|ext| name.ends_with(ext))
 }
 
-/// Copies an image into an `assets` folder next to the document and returns
-/// the relative path to use in the Markdown, e.g. `assets/image-1.png`.
+/// Copies an image into the image folder next to the document ("assets"
+/// unless the preferences say otherwise) and returns the relative path to
+/// use in the Markdown, e.g. `assets/image-1.png`.
 #[tauri::command]
-fn save_image(doc_path: String, file_name: String, bytes: Vec<u8>) -> Result<String, String> {
-    store_image(&doc_path, &file_name, &bytes)
+fn save_image(doc_path: String, file_name: String, bytes: Vec<u8>, folder: Option<String>) -> Result<String, String> {
+    store_image(&doc_path, folder.as_deref(), &file_name, &bytes)
 }
 
-/// Copies an image file chosen with "Insert Image" into the `assets` folder.
+/// Copies an image file chosen with "Insert Image" into the image folder.
 #[tauri::command]
-fn import_image(doc_path: String, source: String) -> Result<String, String> {
+fn import_image(doc_path: String, source: String, folder: Option<String>) -> Result<String, String> {
     let bytes = fs::read(&source).map_err(|e| e.to_string())?;
     let file_name = Path::new(&source)
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("image.png");
-    store_image(&doc_path, file_name, &bytes)
+    store_image(&doc_path, folder.as_deref(), file_name, &bytes)
 }
 
-fn store_image(doc_path: &str, file_name: &str, bytes: &[u8]) -> Result<String, String> {
+fn store_image(doc_path: &str, folder_name: Option<&str>, file_name: &str, bytes: &[u8]) -> Result<String, String> {
+    // A folder inside the document's folder, like "assets" or "images/notes".
+    let folder_name = folder_name.map(|f| f.trim().trim_matches(['/', '\\'])).filter(|f| !f.is_empty()).unwrap_or("assets");
+    if folder_name.contains("..") || folder_name.contains(':') {
+        return Err(format!("Not a folder inside the document's folder: {folder_name}"));
+    }
     let folder = Path::new(doc_path)
         .parent()
         .ok_or("The document has no folder")?
-        .join("assets");
+        .join(folder_name);
     fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
 
     let (stem, ext) = split_file_name(file_name);
@@ -253,7 +259,7 @@ fn store_image(doc_path: &str, file_name: &str, bytes: &[u8]) -> Result<String, 
         n += 1;
     }
     fs::write(folder.join(&name), bytes).map_err(|e| e.to_string())?;
-    Ok(format!("assets/{name}"))
+    Ok(format!("{}/{name}", folder_name.replace('\\', "/")))
 }
 
 /// "My Photo.PNG" -> ("My-Photo", "png"). Keeps names safe for Markdown links.

@@ -20,6 +20,7 @@ const SYMBOLS: Record<string, (mark: Mark) => [string, string]> = {
   },
   inlineCode: () => ['`', '`'],
   strike_through: () => ['~~', '~~'],
+  highlight: () => ['==', '=='],
   link: (mark) => ['[', `](${mark.attrs.href}${mark.attrs.title ? ` "${mark.attrs.title}"` : ''})`],
 };
 

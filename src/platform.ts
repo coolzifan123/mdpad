@@ -282,7 +282,7 @@ const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ic
  * Ask for an image file to insert. For a saved document it is copied to the
  * `assets` folder, like a pasted image. Resolves the `src` for the Markdown.
  */
-export async function pickImage(docPath: string | null): Promise<{ src: string; alt: string } | null> {
+export async function pickImage(docPath: string | null, folder?: string): Promise<{ src: string; alt: string } | null> {
   if (!inTauri) {
     const file = await browserPickImage();
     return file ? { src: await fileToDataUrl(file), alt: file.name.replace(/\.[^.]+$/, '') } : null;
@@ -290,7 +290,7 @@ export async function pickImage(docPath: string | null): Promise<{ src: string; 
   const path = await open({ multiple: false, directory: false, filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] });
   if (typeof path !== 'string') return null;
   const alt = baseName(path).replace(/\.[^.]+$/, '');
-  if (docPath) return { src: await invoke<string>('import_image', { docPath, source: path }), alt };
+  if (docPath) return { src: await invoke<string>('import_image', { docPath, source: path, folder }), alt };
   return { src: encodeURI(path.replace(/\\/g, '/')), alt };
 }
 
@@ -316,10 +316,10 @@ export async function resolveImageSrc(src: string, docPath: string | null): Prom
  * to an `assets` folder next to it and a relative path is returned, like
  * Typora does. For an unsaved document the image is embedded as a data URL.
  */
-export async function storeImage(file: File, docPath: string | null): Promise<string> {
+export async function storeImage(file: File, docPath: string | null, folder?: string): Promise<string> {
   if (!inTauri || !docPath) return fileToDataUrl(file);
   const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-  return invoke<string>('save_image', { docPath, fileName: file.name || 'image.png', bytes });
+  return invoke<string>('save_image', { docPath, fileName: file.name || 'image.png', bytes, folder });
 }
 
 function safeDecodeURI(value: string): string {

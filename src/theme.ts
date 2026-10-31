@@ -1,27 +1,43 @@
 // Light / dark theme. The colors themselves live in styles/theme.css.
 
 type Theme = 'light' | 'dark';
+/** "system" follows Windows' light/dark setting. */
+export type ThemeChoice = Theme | 'system';
 const STORAGE_KEY = 'mdpad-theme';
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
 
-export function applySavedTheme(): void {
+export function themeChoice(): ThemeChoice {
   let saved: string | null = null;
   try {
     saved = localStorage.getItem(STORAGE_KEY);
   } catch {
     // Storage can be unavailable; fall back to the system setting.
   }
-  const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
-  setTheme(saved === 'light' || saved === 'dark' ? saved : systemDark ? 'dark' : 'light');
+  return saved === 'light' || saved === 'dark' ? saved : 'system';
 }
 
-export function toggleTheme(): void {
-  const next: Theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  setTheme(next);
+export function applySavedTheme(): void {
+  const choice = themeChoice();
+  setTheme(choice === 'system' ? (systemDark.matches ? 'dark' : 'light') : choice);
+}
+
+// Follow Windows when it switches between light and dark.
+systemDark.addEventListener('change', () => {
+  if (themeChoice() === 'system') applySavedTheme();
+});
+
+export function setThemeChoice(choice: ThemeChoice): void {
   try {
-    localStorage.setItem(STORAGE_KEY, next);
+    if (choice === 'system') localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, choice);
   } catch {
     // Not critical.
   }
+  applySavedTheme();
+}
+
+export function toggleTheme(): void {
+  setThemeChoice(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 }
 
 function setTheme(theme: Theme): void {

@@ -30,6 +30,8 @@ import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 import { frontmatter } from './frontmatter';
+import { emojiInputRule } from './emoji';
+import { highlight, highlightHandler, toggleHighlightCommand } from './highlight';
 import { imageHandler, useImageBlocks } from './image-blocks';
 import { markersPlugin } from './markers';
 import { mermaidPreview } from './mermaid';
@@ -137,7 +139,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       ctx.update(remarkStringifyOptionsCtx, (current) => ({
         ...current,
         ...style,
-        handlers: { ...current.handlers, image: imageHandler, ...style.handlers },
+        handlers: { ...current.handlers, image: imageHandler, highlight: highlightHandler, ...style.handlers },
       }));
     })
     .use(upload)
@@ -147,6 +149,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(frontmatter)
     .use(tocPlugin)
     .use(markersPlugin)
+    .use(highlight)
+    .use(emojiInputRule)
     // Code blocks in "mermaid" show the diagram (math blocks already show
     // their formula this way).
     .config((ctx) =>
@@ -268,6 +272,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     italic: () => call(toggleEmphasisCommand),
     'inline-code': () => call(toggleInlineCodeCommand),
     strikethrough: () => call(toggleStrikethroughCommand),
+    highlight: () => call(toggleHighlightCommand),
     quote: () => call(wrapInBlockquoteCommand),
     'bullet-list': () => call(wrapInBulletListCommand),
     'ordered-list': () => call(wrapInOrderedListCommand),
@@ -395,6 +400,7 @@ function createSourceEditor(options: EditorOptions): MarkdownEditor {
     italic: () => wrap('*'),
     'inline-code': () => wrap('`'),
     strikethrough: () => wrap('~~'),
+    highlight: () => wrap('=='),
     link: (href) => typeof href === 'string' && replaceSelection(`[${textarea.value.slice(textarea.selectionStart, textarea.selectionEnd) || href}](${href})`),
     image: (image) => {
       const { src, alt = '' } = image as { src: string; alt?: string };
