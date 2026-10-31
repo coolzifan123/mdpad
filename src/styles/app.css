@@ -623,6 +623,13 @@ body {
   padding: 40px 72px 30vh;
 }
 
+/* Big files: the browser skips laying out blocks that are off screen, which
+   halves the time each keystroke takes. */
+.wysiwyg-root.large-doc .milkdown .ProseMirror > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1.5em;
+}
+
 .source-editor {
   display: block;
   width: 100%;

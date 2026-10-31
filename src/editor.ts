@@ -102,6 +102,8 @@ export function createEditor(mode: EditorMode, options: EditorOptions): Promise<
 async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEditor> {
   const root = document.createElement('div');
   root.className = 'wysiwyg-root';
+  // See .large-doc in app.css.
+  root.classList.toggle('large-doc', options.markdown.length > 100_000);
   options.host.append(root);
 
   const crepe = new Crepe({
