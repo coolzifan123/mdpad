@@ -38,6 +38,7 @@ interface Part {
 /** A stretch of Markdown text in a block (positions in the document). */
 interface Group {
   prefix: boolean;
+  mark: Mark;
   id: number;
   from: number;
   to: number;
@@ -81,11 +82,14 @@ interface MdNode {
 /** A mark for Markdown text: never read from a file, written out as it is. */
 const markdownTextMark = (name: string, inclusive: boolean, className: string) =>
   $markSchema(name, () => ({
-    attrs: { id: { default: 0 } },
+    // `style`: classes that make the text look as it will (bold…). On the
+    // mark, not as decorations: text typed inside a decoration gets redrawn
+    // after each key, which is slow in big files.
+    attrs: { id: { default: 0 }, style: { default: '' } },
     excludes: '_',
     inclusive,
     parseDOM: [],
-    toDOM: () => ['span', { class: className }, 0],
+    toDOM: (mark) => ['span', { class: `${className} ${mark.attrs.style}`.trim() }, 0],
     parseMarkdown: { match: () => false, runner: () => {} },
     toMarkdown: {
       match: (mark) => mark.type.name === name,
@@ -204,7 +208,7 @@ export function createInlineSource(): InlineSource {
         last.to += child.nodeSize;
         last.text += child.text;
       } else {
-        last = { prefix: isPrefix, id: mark.attrs.id as number, from, to: from + child.nodeSize, text: child.text ?? '' };
+        last = { prefix: isPrefix, mark, id: mark.attrs.id as number, from, to: from + child.nodeSize, text: child.text ?? '' };
         groups.push(last);
       }
     });
@@ -280,7 +284,10 @@ export function createInlineSource(): InlineSource {
     content.forEach((node, offset) => marks.push([offset, offset + node.nodeSize, node.marks]));
     const id = nextId++;
     parts.set(id, { source: markdown, symbols, marks });
-    const mark = markTypes().source.create({ id });
+    // The formatting all of the text has (for nested formatting, the outer one).
+    const { styles } = layout(markdown);
+    const style = (styles[0] ?? '').split(' ').filter((name) => name && styles.every((s) => s.split(' ').includes(name)));
+    const mark = markTypes().source.create({ id, style: style.join(' ') });
     tr.addMark(from, to, mark);
     const shownBefore = (index: number) => shownAt.filter((at) => at < index).length;
     for (const [start, end] of [...symbols].reverse()) {
@@ -454,7 +461,6 @@ export function createInlineSource(): InlineSource {
 
   /** The mark for text typed at [from, to), if it goes into Markdown text. */
   function typedMark(state: EditorState, from: number, to: number): Mark | null {
-    const { source, prefix } = markTypes();
     const $from = state.doc.resolve(from);
     if (!$from.parent.isTextblock || !$from.sameParent(state.doc.resolve(to))) return null;
     for (const group of groupsIn($from.parent, $from.start())) {
@@ -464,7 +470,7 @@ export function createInlineSource(): InlineSource {
           : group.prefix
             ? group.from <= from && from < group.to // "#" typed before "## " adds a level
             : group.from < from && from <= group.to; // typed right after "**" is still inside
-      if (into) return (group.prefix ? prefix : source).create({ id: group.id });
+      if (into) return group.mark;
     }
     return null;
   }
@@ -519,14 +525,8 @@ export function createInlineSource(): InlineSource {
                 decorations.push(Decoration.inline(group.from, group.to, { class: 'md-symbol' }));
                 continue;
               }
-              const { symbols, shownAt, styles } = layout(group.text);
-              for (const [start, end] of symbols) decorations.push(Decoration.inline(group.from + start, group.from + end, { class: 'md-symbol' }));
-              // The text in between looks as it will: bold, italic…
-              for (let i = 0; i < shownAt.length; ) {
-                let j = i + 1;
-                while (j < shownAt.length && styles[j] === styles[i] && shownAt[j] === shownAt[j - 1] + 1) j++;
-                if (styles[i]) decorations.push(Decoration.inline(group.from + shownAt[i], group.from + shownAt[j - 1] + 1, { class: styles[i] }));
-                i = j;
+              for (const [start, end] of layout(group.text).symbols) {
+                decorations.push(Decoration.inline(group.from + start, group.from + end, { class: 'md-symbol' }));
               }
             }
           }
