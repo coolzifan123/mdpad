@@ -10,6 +10,7 @@ import { redoCommand, undoCommand } from '@milkdown/kit/plugin/history';
 import { upload, uploadConfig, type Uploader } from '@milkdown/kit/plugin/upload';
 import {
   createCodeBlockCommand,
+  headingIdGenerator,
   insertHrCommand,
   insertImageCommand,
   toggleEmphasisCommand,
@@ -41,10 +42,11 @@ import { frontmatter } from './frontmatter';
 import { autopairPlugin } from './autopair';
 import { emojiInputRule } from './emoji';
 import { highlight, highlightHandler, toggleHighlightCommand } from './highlight';
+import { textCommands } from './keymap';
 import { imageHandler, useImageBlocks } from './image-blocks';
-import { markersPlugin } from './markers';
+import { createInlineSource } from './inline-source';
 import { mermaidPreview } from './mermaid';
-import { tocPlugin } from './toc';
+import { tocPlugin, tocText } from './toc';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
 import { ProseSearcher, searchHighlightPlugin, TextareaSearcher, type Searcher } from './search';
@@ -141,12 +143,16 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
   // Milkdown parses the file into a syntax tree that knows where each block
   // is in the file. Keep it, to save unedited blocks exactly as they were.
   let fileTree: SourceTree | null = null;
+  // The Markdown at the cursor, shown and edited as text (like Typora).
+  const inlineSource = createInlineSource();
   const keepFileTree = $remark('keepFileTree', () => () => (tree, file) => {
     if (!fileTree && String(file.value) === options.markdown) fileTree = tree as unknown as SourceTree;
   });
   crepe.editor
     .config((ctx) => {
       ctx.update(uploadConfig.key, (config) => ({ ...config, uploader }));
+      // Heading ids (for #links) from the text as shown, without a written-out "## ".
+      ctx.set(headingIdGenerator.key, (node) => inlineSource.shownText(node).toLowerCase().trim().replace(/\s+/g, '-'));
       ctx.update(remarkStringifyOptionsCtx, (current) => ({
         ...current,
         ...style,
@@ -159,7 +165,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(currentBlockPlugin)
     .use(frontmatter)
     .use(tocPlugin)
-    .use(markersPlugin)
+    .use(inlineSource.plugins)
     .use(highlight)
     .use(emojiInputRule)
     .use(autopairPlugin)
@@ -198,7 +204,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       .filter((block) => block.type !== 'definition')
       .map((block) => [block.position?.start.offset ?? -1, block.position?.end.offset ?? -1]);
   const tree = fileTree as SourceTree | null; // set by the plugin above, during create()
-  const preserver = tree && BlockPreserver.create(options.markdown, tree, view.state.doc, serialize, locate);
+  const preserver = tree && BlockPreserver.create(options.markdown, tree, inlineSource.committed(view.state).doc, serialize, locate);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any command
   const call =(command: { key: CmdKey<any> }, payload?: unknown) => crepe.editor.action(callCommand(command.key, payload));
@@ -226,6 +232,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     options.openLink(link.getAttribute('href') ?? '');
   });
   writingModes.scroller = options.host;
+  tocText.of = inlineSource.shownText;
 
   /** A bullet list whose items have checkboxes; toggles them in a list. */
   const taskList = () => {
@@ -296,6 +303,10 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     paragraph: () => call(turnIntoTextCommand),
     'heading-up': () => shiftHeading(1),
     'heading-down': () => shiftHeading(-1),
+    'refresh-symbols': () => {
+      inlineSource.refresh(view);
+      return true;
+    },
     'center-cursor': () => {
       centerCursor(view);
       return true;
@@ -350,14 +361,19 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
 
   return {
     mode: 'wysiwyg',
-    getMarkdown: () => (preserver ? preserver.markdown(view.state.doc) : crepe.getMarkdown()),
-    headings: () =>
-      // The text from the document, not the screen: the screen also has the
-      // "## " shown at the cursor (markers.ts).
-      headingElements().map((el) => ({
-        level: Number(el.tagName[1]),
-        text: view.state.doc.resolve(view.posAtDOM(el, 0)).parent.textContent.trim(),
-      })),
+    getMarkdown: () => {
+      const doc = inlineSource.committed(view.state).doc;
+      return preserver ? preserver.markdown(doc) : serializer(doc);
+    },
+    headings: () => {
+      // From the document as saved: the heading at the cursor has its "## "
+      // written out (inline-source.ts).
+      const headings: Heading[] = [];
+      inlineSource.committed(view.state).doc.descendants((node) => {
+        if (node.type.name === 'heading') headings.push({ level: node.attrs.level as number, text: node.textContent.trim() });
+      });
+      return headings;
+    },
     revealHeading: (index) => {
       const el = headingElements()[index];
       if (!el) return;
@@ -368,7 +384,9 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     },
     selectionMarkdown: () => {
       const { from, to, empty } = view.state.selection;
-      return empty ? '' : serializer(view.state.doc.cut(from, to)).trim();
+      if (empty) return '';
+      const { doc, mapping } = inlineSource.committed(view.state);
+      return serializer(doc.cut(mapping.map(from), mapping.map(to, -1))).trim();
     },
     currentHeading: (scroller) => {
       // A heading near the top of the view counts as the one being read.
@@ -383,6 +401,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       const action = commands[command];
       if (!action) return false;
       view.focus();
+      // Commands work on the formatting, not on the Markdown text at the cursor.
+      if (textCommands.has(command)) inlineSource.settle(view, command);
       return action(arg);
     },
     searcher: new ProseSearcher(view),

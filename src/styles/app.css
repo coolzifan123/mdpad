@@ -693,7 +693,7 @@ body {
   background: #6b5d1e;
 }
 
-/* "**", "##"… shown around the formatting at the cursor (markers.ts). */
+/* "**", "## "… of the Markdown written out at the cursor (inline-source.ts). */
 .milkdown .ProseMirror .md-symbol {
   color: var(--app-fg-muted);
   font-family: var(--app-font-code);
@@ -701,11 +701,6 @@ body {
   font-style: normal;
   font-weight: normal;
   opacity: 0.75;
-  user-select: none;
-}
-
-body.hide-symbols .md-symbol {
-  display: none;
 }
 
 /* [TOC] */

@@ -18,7 +18,7 @@ export function remarkHighlight() {
   return (tree: MdNode) => splitHighlights(tree);
 }
 
-const HIGHLIGHT = /==(?=\S)([^=]*?\S)==/g;
+export const HIGHLIGHT = /==(?=\S)([^=]*?\S)==/g;
 
 function splitHighlights(node: MdNode): void {
   if (!node.children) return;

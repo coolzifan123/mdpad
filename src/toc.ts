@@ -6,6 +6,9 @@ import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view';
 import { $prose } from '@milkdown/kit/utils';
 
+/** A heading's text as shown (the editor leaves out a written-out "## "). */
+export const tocText = { of: (heading: ProseNode) => heading.textContent };
+
 interface TocHeading {
   level: number;
   text: string;
@@ -41,7 +44,7 @@ export const tocPlugin = $prose(
 function collectHeadings(doc: ProseNode): TocHeading[] {
   const headings: TocHeading[] = [];
   doc.descendants((node, pos) => {
-    if (node.type.name === 'heading') headings.push({ level: node.attrs.level as number, text: node.textContent, pos });
+    if (node.type.name === 'heading') headings.push({ level: node.attrs.level as number, text: tocText.of(node), pos });
     return node.isBlock;
   });
   return headings;

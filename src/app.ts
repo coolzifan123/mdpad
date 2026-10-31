@@ -20,6 +20,7 @@ import { applyLayout, loadPreferences, savePreferences, showPreferences, type Pr
 import { writingModes } from './writing-modes';
 import { textStats } from './wordcount';
 import { autopairSettings } from './autopair';
+import { inlineSourceSettings } from './inline-source';
 
 const APP_NAME = 'MdPad';
 const UNTITLED = 'Untitled.md';
@@ -495,7 +496,8 @@ export class App {
     saveText(VIEW_KEY, JSON.stringify(this.view));
     document.body.classList.toggle('focus-mode', this.view.focus);
     document.body.classList.toggle('typewriter', this.view.typewriter);
-    document.body.classList.toggle('hide-symbols', !this.view.symbols);
+    inlineSourceSettings.enabled = this.view.symbols;
+    if (change.symbols !== undefined) this.editor?.run('refresh-symbols');
     writingModes.typewriter = this.view.typewriter;
     if (change.typewriter) this.editor?.run('center-cursor');
     if (change.zoom !== undefined || Object.keys(change).length === 0) void platform.setZoom(this.view.zoom);

@@ -6,7 +6,8 @@ A free, open-source, Typora-like Markdown editor built with
 ## Features
 
 - **Live preview** editing like Typora: type `# `, `**bold**`, `- `, `> `… and
-  the formatting appears; its Markdown symbols show around it at the cursor
+  the formatting appears. At the cursor, formatted text shows its Markdown
+  (`**bold**`, `## `, `[text](url)`), which you can edit directly
 - Tables, task lists, highlighted code, math, Mermaid diagrams, footnotes,
   `[TOC]`, `==highlight==`, emoji shortcodes (`:smile:`), YAML front matter
 - **Sidebar** with the document outline and a folder's files; Quick Open
@@ -127,8 +128,6 @@ examples/welcome.md      A sample document
 
 ## Known limitations
 
-- Markdown markers are hidden while editing (like Notion). Typora shows them
-  when the cursor is inside the formatted text; that would need a custom plugin.
 - Saving keeps the parts of a file you didn't edit exactly as they were, and
   keeps its line endings (CRLF or LF). A block you did edit is rewritten in
   the file's own style (bullet character, `---` rules, ...), but small things
