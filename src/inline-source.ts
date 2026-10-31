@@ -536,6 +536,12 @@ export function createInlineSource(): InlineSource {
           if (!inlineSourceSettings.enabled) return false;
           const mark = typedMark(view.state, from, to);
           if (!mark) return false;
+          // Letters, digits and spaces can't finish Markdown syntax, and the
+          // browser types them into the Markdown text by itself, which is much
+          // faster in big files than placing the cursor again. Other
+          // characters are typed here, so input rules don't turn "**a**" into
+          // bold inside the Markdown text.
+          if (mark.type !== markTypes().prefix && /^[\p{L}\p{N} ]+$/u.test(text)) return false;
           view.dispatch(view.state.tr.replaceWith(from, to, view.state.schema.text(text, [mark])));
           return true;
         },
