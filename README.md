@@ -3,33 +3,42 @@
 A free, open-source, Typora-like Markdown editor built with
 [Tauri 2](https://tauri.app) and [Milkdown Crepe](https://milkdown.dev).
 
-## Features (MVP)
+## Features
 
-- Live preview editing (WYSIWYG): type `# `, `**bold**`, `- `, `> `, etc.
-- Tables, task lists, syntax-highlighted code blocks, LaTeX math
-- Source mode (`Ctrl+/`) to edit the raw Markdown
-- New / Open / Save / Save As, with "unsaved changes" prompts
-- Images: relative paths display correctly; pasted images are copied to an
-  `assets/` folder next to the document (once the file has been saved)
-- Light and dark theme, word count (CJK aware)
+- **Live preview** editing like Typora: type `# `, `**bold**`, `- `, `> `… and
+  the formatting appears; its Markdown symbols show around it at the cursor
+- Tables, task lists, highlighted code, math, Mermaid diagrams, footnotes,
+  `[TOC]`, `==highlight==`, emoji shortcodes (`:smile:`), YAML front matter
+- **Sidebar** with the document outline and a folder's files; Quick Open
+- **Find and replace**, spell check, focus and typewriter modes, zoom
+- Export to **HTML** and **PDF**, print
+- **Saves carefully**: parts of a file you didn't edit stay exactly as they
+  were, with their line endings and encoding (UTF-8, GBK, UTF-16)
+- Recent files, auto save, light/dark and custom CSS themes, Preferences
+- Updates itself from GitHub Releases
 
-| Shortcut       | Action             |
-| -------------- | ------------------ |
-| `Ctrl+N`       | New file           |
-| `Ctrl+O`       | Open file          |
-| `Ctrl+S`       | Save               |
-| `Ctrl+Shift+S` | Save as            |
-| `Ctrl+/`       | Toggle source mode |
+| Shortcut | Action | Shortcut | Action |
+| --- | --- | --- | --- |
+| `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New / Open / Save | `Ctrl+1`…`6`, `Ctrl+0` | Heading, paragraph |
+| `Ctrl+P` | Quick Open | `Ctrl+B` / `I` / `K` | Bold / italic / link |
+| `Ctrl+F` / `Ctrl+H` | Find / replace | `Ctrl+T` | Table |
+| `Ctrl+Shift+L` | Sidebar | `Ctrl+Shift+K` / `M` | Code / math block |
+| `Ctrl+/` | Source mode | `Ctrl+Shift+H` | Highlight |
+| `F8` / `F9` / `F11` | Focus / typewriter / full screen | `Ctrl+,` | Preferences |
+
+All shortcuts are listed in the menus.
 
 ## Download
 
-GitHub builds a Windows installer for every change. Open the **Actions** tab,
-click the newest **Windows build** run, and download the `.exe` under
-**Artifacts** (sign in to GitHub first). Versions tagged like `v0.1.0` are also
-published on the **Releases** page.
+Get the installer (`MdPad_x.y.z_x64-setup.exe`) from the
+[**Releases** page](https://github.com/coolzifan123/mdpad/releases). After
+that, MdPad updates itself (Help → Check for Updates).
 
 Windows may warn that the app is from an unknown publisher, because it isn't
 code-signed yet: click **More info → Run anyway**.
+
+Builds of every change are on the **Actions** tab, under **Artifacts** (sign in
+to GitHub first). How to publish a release: [docs/releasing.md](docs/releasing.md).
 
 ## Run it on Windows
 
@@ -133,3 +142,7 @@ examples/welcome.md      A sample document
 - Dragging a file onto the window doesn't open it yet; use `Ctrl+O`.
 - Not yet: outline sidebar, file tree, find and replace, Mermaid diagrams,
   export to PDF/HTML, auto-save.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).

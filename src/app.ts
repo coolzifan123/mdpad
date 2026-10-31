@@ -13,6 +13,7 @@ import { Outline } from './outline';
 import * as platform from './platform';
 import { quickOpen } from './quick-open';
 import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
+import { dueForCheck, offerUpdate, rememberCheck } from './updates';
 import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
 import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
 import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
@@ -121,6 +122,7 @@ export class App {
     'open-theme-folder': () => platform.openThemeFolder(),
     'reveal-file': () => this.doc.path && platform.revealInExplorer(this.doc.path),
     preferences: () => this.openPreferences(),
+    'check-updates': () => this.checkForUpdates(true),
     'toggle-sidebar': () => this.sidebar.toggle(),
     'show-outline': () => this.sidebar.toggleTab('outline'),
     'show-files': () => this.sidebar.toggleTab('files'),
@@ -194,6 +196,10 @@ export class App {
     this.setView({});
     applyLayout(this.prefs);
     await this.loadThemes();
+    // Look for a new version a little after starting, at most once a day.
+    if (this.prefs.checkUpdates && dueForCheck()) {
+      setTimeout(() => void this.run(() => this.checkForUpdates(false)), 8000);
+    }
     const initialPath = await platform.initialFilePath();
     if (initialPath) {
       try {
@@ -425,7 +431,39 @@ export class App {
           },
         ],
       },
+      {
+        title: 'Updates',
+        fields: [
+          { kind: 'checkbox', label: 'Check for new versions automatically', value: this.prefs.checkUpdates, onChange: (checkUpdates) => set({ checkUpdates }) },
+        ],
+      },
     ]).then(() => this.editor?.focus());
+  }
+
+  /**
+   * Look for a new version. Done by itself (`manual` false), it stays quiet
+   * unless there is one; from the Help menu it always says what it found.
+   */
+  private async checkForUpdates(manual: boolean): Promise<void> {
+    let update: Awaited<ReturnType<typeof platform.checkForUpdate>>;
+    try {
+      update = await platform.checkForUpdate();
+      rememberCheck();
+    } catch (error) {
+      if (manual) await platform.showError(`Could not check for updates.\n\n${error}`);
+      return;
+    }
+    if (!update) {
+      if (manual) await platform.showMessage(`You have the latest version of ${APP_NAME} (${__APP_VERSION__}).`, 'No Updates');
+      return;
+    }
+    // Let other commands run while the offer is showing.
+    this.busy = false;
+    if (!(await offerUpdate(update.version))) return;
+    await this.run(async () => {
+      if (!(await this.confirmDiscardChanges())) return;
+      await platform.installUpdate();
+    });
   }
 
   private newFileLineEnding(): LineEnding {

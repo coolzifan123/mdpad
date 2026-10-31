@@ -63,6 +63,16 @@ export async function fileModified(path: string): Promise<number | null> {
   return inTauri ? invoke<number | null>('file_modified', { path }) : null;
 }
 
+/** A newer version on GitHub, or null. */
+export async function checkForUpdate(): Promise<{ version: string; notes: string | null } | null> {
+  return inTauri ? invoke('check_update') : null;
+}
+
+/** Downloads and runs the new installer; MdPad closes and restarts. */
+export async function installUpdate(): Promise<void> {
+  await invoke('install_update');
+}
+
 /** Open another MdPad window. */
 export async function newWindow(): Promise<void> {
   if (inTauri) await invoke('new_window');

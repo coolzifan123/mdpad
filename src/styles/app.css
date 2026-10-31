@@ -441,6 +441,39 @@ body {
   border: 0;
 }
 
+/* "MdPad x.y is available" */
+.update-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 36px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-chrome-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.update-bar button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.update-bar button.primary {
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+  color: #fff;
+}
+
 /* --- Dialog ------------------------------------------------------------- */
 
 .dialog-backdrop {

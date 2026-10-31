@@ -2,7 +2,12 @@ name: Windows build
 
 # Builds the Windows installer for every push to main and every pull request.
 # Download it from the run's page, under "Artifacts".
-# Pushing a version tag (for example v0.1.0) also publishes it as a release.
+#
+# Pushing a version tag (for example v0.2.0) also publishes a release: the
+# installer, signed for automatic updates, plus latest.json, which installed
+# copies of MdPad read to find new versions. The release text comes from
+# docs/releases/<tag>.md. Signing needs the repository secret
+# TAURI_SIGNING_PRIVATE_KEY (see docs/releasing.md).
 
 on:
   push:
@@ -16,6 +21,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write # to publish releases for version tags
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -30,11 +37,32 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Check the tag matches the app version
+        if: env.RELEASE == 'true'
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match package.json version $version" >&2
+            exit 1
+          fi
+          test -f "docs/releases/$GITHUB_REF_NAME.md" || { echo "Missing docs/releases/$GITHUB_REF_NAME.md" >&2; exit 1; }
+
       - name: Install npm packages
         run: npm ci
 
       - name: Build the installer
-        run: npx tauri build --bundles nsis
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          if [ "$RELEASE" = "true" ]; then
+            # Also sign the installer, for automatic updates.
+            npx tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          else
+            npx tauri build --bundles nsis
+          fi
 
       - name: Upload the installer
         uses: actions/upload-artifact@v7
@@ -43,8 +71,30 @@ jobs:
           archive: false # download the .exe itself, not a zip
           if-no-files-found: error
 
+      - name: Write latest.json for automatic updates
+        if: env.RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $base = "https://github.com/$env:GITHUB_REPOSITORY/releases"
+          @{
+            version   = $env:GITHUB_REF_NAME.TrimStart('v')
+            notes     = "$base/tag/$env:GITHUB_REF_NAME"
+            pub_date  = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = @{
+              'windows-x86_64' = @{
+                signature = (Get-Content "$($setup.FullName).sig" -Raw).Trim()
+                url       = "$base/download/$env:GITHUB_REF_NAME/$($setup.Name)"
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 latest.json
+          Get-Content latest.json
+
       - name: Publish a release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          files: src-tauri/target/release/bundle/nsis/*-setup.exe
+          body_path: docs/releases/${{ github.ref_name }}.md
+          files: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            latest.json

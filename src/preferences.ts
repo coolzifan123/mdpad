@@ -12,6 +12,8 @@ export interface Preferences {
   imageFolder: string;
   /** Line endings of new files. */
   newFileLineEnding: 'system' | 'lf' | 'crlf';
+  /** Look for a new version once a day. */
+  checkUpdates: boolean;
 }
 
 const KEY = 'mdpad-prefs';
@@ -21,6 +23,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   spellcheck: true,
   imageFolder: 'assets',
   newFileLineEnding: 'system',
+  checkUpdates: true,
 };
 
 export function loadPreferences(): Preferences {

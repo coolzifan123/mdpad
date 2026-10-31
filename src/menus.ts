@@ -164,7 +164,11 @@ export function buildMenus(state: () => MenuState): Menu[] {
     },
     {
       label: 'Help',
-      items: () => [{ label: 'About MdPad', command: 'about' }],
+      items: () => [
+        { label: 'Check for Updates…', command: 'check-updates' },
+        'separator',
+        { label: 'About MdPad', command: 'about' },
+      ],
     },
   ];
 }

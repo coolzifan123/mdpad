@@ -109,6 +109,54 @@ fn new_window() -> Result<(), String> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Updates: GitHub Releases has latest.json (see .github/workflows), signed
+// with the key whose public half is in tauri.conf.json.
+
+/// The update found by `check_update`, kept until it is installed.
+#[derive(Default)]
+struct PendingUpdate(std::sync::Mutex<Option<tauri_plugin_updater::Update>>);
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: Option<String>,
+}
+
+/// Is there a newer version? (For tests, MDPAD_UPDATE_URL replaces the
+/// address of latest.json.)
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle, pending: tauri::State<'_, PendingUpdate>) -> Result<Option<UpdateInfo>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let mut builder = app.updater_builder();
+    if let Ok(url) = std::env::var("MDPAD_UPDATE_URL") {
+        let url = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
+        builder = builder.endpoints(vec![url]).map_err(|e| e.to_string())?;
+    }
+    let update = builder
+        .build()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+    let info = update.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        notes: u.body.clone(),
+    });
+    *pending.0.lock().unwrap() = update;
+    Ok(info)
+}
+
+/// Downloads and runs the new installer, which closes and restarts MdPad.
+#[tauri::command]
+async fn install_update(pending: tauri::State<'_, PendingUpdate>) -> Result<(), String> {
+    let update = pending.0.lock().unwrap().take().ok_or("No update to install")?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// The file passed on the command line (e.g. "Open with" in Explorer).
 #[tauri::command]
 fn initial_file() -> Option<String> {
@@ -284,6 +332,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
             read_text_file,
             write_text_file,
@@ -296,7 +346,9 @@ pub fn run() {
             list_themes,
             read_theme,
             file_modified,
-            new_window
+            new_window,
+            check_update,
+            install_update
         ])
         .setup(|app| {
             // The window is described in tauri.conf.json ("create": false),
