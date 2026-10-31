@@ -8,6 +8,8 @@ export interface Preferences {
   /** Widest the text column gets, in px. */
   editorWidth: number;
   spellcheck: boolean;
+  /** Typing "(" also adds ")", and so on. */
+  autoPair: boolean;
   /** Folder next to a document where pasted images go. */
   imageFolder: string;
   /** Line endings of new files. */
@@ -21,6 +23,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   fontSize: 16,
   editorWidth: 900,
   spellcheck: true,
+  autoPair: true,
   imageFolder: 'assets',
   newFileLineEnding: 'system',
   checkUpdates: true,

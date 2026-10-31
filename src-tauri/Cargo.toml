@@ -1,6 +1,6 @@
 [package]
 name = "mdpad"
-version = "0.2.0"
+version = "0.2.1"
 description = "A Typora-like Markdown editor"
 edition = "2021"
 

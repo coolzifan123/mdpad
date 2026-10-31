@@ -18,7 +18,8 @@ import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
 import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
 import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
 import { writingModes } from './writing-modes';
-import { countText } from './wordcount';
+import { textStats } from './wordcount';
+import { autopairSettings } from './autopair';
 
 const APP_NAME = 'MdPad';
 const UNTITLED = 'Untitled.md';
@@ -123,6 +124,9 @@ export class App {
     'reveal-file': () => this.doc.path && platform.revealInExplorer(this.doc.path),
     preferences: () => this.openPreferences(),
     'check-updates': () => this.checkForUpdates(true),
+    'copy-markdown': () => this.copyAs('markdown'),
+    'copy-html': () => this.copyAs('html'),
+    'word-count': () => this.showWordCount(),
     'toggle-sidebar': () => this.sidebar.toggle(),
     'show-outline': () => this.sidebar.toggleTab('outline'),
     'show-files': () => this.sidebar.toggleTab('files'),
@@ -248,6 +252,13 @@ export class App {
       removeRecentFile(path);
       await platform.showError(`Could not open ${path}\n\n${error}`);
     }
+  }
+
+  /** Markdown files dropped on the window: the first here, others in new windows. */
+  private async openDropped(paths: string[]): Promise<void> {
+    const [first, ...others] = paths.filter(isMarkdownName);
+    for (const path of others) await platform.newWindow(path);
+    if (first) await this.openPath(first);
   }
 
   /** Resolves true if the document was saved. */
@@ -395,6 +406,7 @@ export class App {
         title: 'Editor',
         fields: [
           { kind: 'checkbox', label: 'Check spelling', value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
+          { kind: 'checkbox', label: 'Type brackets and quotes in pairs', value: this.prefs.autoPair, onChange: (autoPair) => set({ autoPair }) },
           { kind: 'checkbox', label: 'Show Markdown symbols at the cursor', value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
           { kind: 'checkbox', label: 'Focus mode', value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
           { kind: 'checkbox', label: 'Typewriter mode', value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
@@ -474,6 +486,7 @@ export class App {
   /** The browser's spell checker underlines misspelled words. */
   private applySpellcheck(): void {
     this.ui.host.querySelector('.ProseMirror, .source-editor')?.setAttribute('spellcheck', String(this.prefs.spellcheck));
+    autopairSettings.enabled = this.prefs.autoPair;
   }
 
   /** Change and remember view settings, and show them. */
@@ -694,12 +707,38 @@ export class App {
       true,
     );
 
+    // Selected words in the status bar; clicking it shows the details.
+    let countQueued = false;
+    document.addEventListener('selectionchange', () => {
+      if (countQueued) return;
+      countQueued = true;
+      setTimeout(() => {
+        countQueued = false;
+        this.updateWordCount();
+      }, 150);
+    });
+    this.ui.statusCount.addEventListener('click', () => void this.run('word-count'));
+
     window.addEventListener('focus', () => {
       if (!this.busy) void this.run(() => this.checkOutsideChange());
     });
 
-    // A file dropped outside the editor would make the webview open it in
-    // place of the app. (Milkdown handles files dropped inside the editor.)
+    // Dropped Markdown files open; dropped images go into the document
+    // (Milkdown does that). Capture phase, so the editor never sees a .md.
+    window.addEventListener(
+      'drop',
+      (event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length || ![...files].some((file) => isMarkdownName(file.name))) return;
+        event.preventDefault();
+        event.stopPropagation();
+        platform.requestDroppedPaths(files);
+      },
+      true,
+    );
+    platform.onFilesDropped((paths) => void this.run(() => this.openDropped(paths)));
+    // Any other file dropped outside the editor would make the webview
+    // open it in place of the app.
     for (const type of ['dragover', 'drop'] as const) {
       window.addEventListener(type, (event) => {
         if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
@@ -731,10 +770,40 @@ export class App {
     void platform.setWindowTitle(`${dirty ? '● ' : ''}${name} - ${APP_NAME}`);
   }
 
-  private updateWordCount(markdown: string): void {
-    const { words, characters } = countText(markdown);
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-    this.ui.statusCount.textContent = `${plural(words, 'word')} · ${plural(characters, 'character')}`;
+  /** "340 words · 1,912 characters", or "12 of 340 words" with a selection. */
+  private updateWordCount(markdown = this.editor?.getMarkdown() ?? ''): void {
+    const total = textStats(markdown);
+    const selected = this.editor?.selectionMarkdown() ?? '';
+    const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+    this.ui.statusCount.textContent = selected
+      ? `${textStats(selected).words.toLocaleString()} of ${plural(total.words, 'word')}`
+      : `${plural(total.words, 'word')} · ${plural(total.characters, 'character')}`;
+  }
+
+  /** Clicking the word count: the details, for the selection too. */
+  private async showWordCount(): Promise<void> {
+    const describe = (title: string, markdown: string) => {
+      const s = textStats(markdown);
+      const minutes = s.readingMinutes < 1 ? 'under a minute' : `about ${Math.round(s.readingMinutes)} min`;
+      return [
+        title,
+        `  Words: ${s.words.toLocaleString()}`,
+        `  Characters: ${s.characters.toLocaleString()} (${s.charactersWithSpaces.toLocaleString()} with spaces)`,
+        `  Paragraphs: ${s.paragraphs.toLocaleString()}`,
+        `  Reading time: ${minutes}`,
+      ].join('\n');
+    };
+    const selected = this.editor?.selectionMarkdown() ?? '';
+    const parts = [describe('Document', this.editor?.getMarkdown() ?? '')];
+    if (selected) parts.push(describe('Selection', selected));
+    await platform.showMessage(parts.join('\n\n'), 'Word Count');
+  }
+
+  /** Edit > Copy as Markdown / Copy as HTML Code: the selection, or everything. */
+  private async copyAs(kind: 'markdown' | 'html'): Promise<void> {
+    const markdown = this.editor?.selectionMarkdown() || this.editor?.getMarkdown() || '';
+    const text = kind === 'markdown' ? markdown : await (await import('./export')).toHtml(markdown);
+    await platform.writeClipboardText(text);
   }
 }
 
@@ -753,6 +822,8 @@ function saveText(key: string, value: string): void {
     // Not critical.
   }
 }
+
+const isMarkdownName = (name: string) => /\.(md|markdown|mdown|mkd|txt)$/i.test(name);
 
 function blankDocument(): platform.OpenedFile {
   return { path: null, name: UNTITLED, content: '', format: platform.DEFAULT_FORMAT, modified: 0 };

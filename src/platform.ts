@@ -6,10 +6,11 @@
 // picker and downloads so the editor can still be tried without Rust.
 
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { dirname, resolve } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { readText } from '@tauri-apps/plugin-clipboard-manager';
+import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
@@ -73,10 +74,32 @@ export async function installUpdate(): Promise<void> {
   await invoke('install_update');
 }
 
-/** Open another MdPad window. */
-export async function newWindow(): Promise<void> {
-  if (inTauri) await invoke('new_window');
+/** Open another MdPad window, optionally with a file. */
+export async function newWindow(path?: string): Promise<void> {
+  if (inTauri) await invoke('new_window', { path });
   else window.open(location.href, '_blank');
+}
+
+// ---------------------------------------------------------------------------
+// Files dropped on the window (see listen_for_dropped_files in lib.rs)
+
+interface WebViewHost {
+  postMessageWithAdditionalObjects?: (message: string, objects: FileList) => void;
+}
+
+/**
+ * Ask WebView2 for the paths of dropped files; they arrive through
+ * `onFilesDropped`. Returns false where that isn't possible (in a browser).
+ */
+export function requestDroppedPaths(files: FileList): boolean {
+  const host = (window as unknown as { chrome?: { webview?: WebViewHost } }).chrome?.webview;
+  if (!inTauri || !host?.postMessageWithAdditionalObjects) return false;
+  host.postMessageWithAdditionalObjects('mdpad-dropped-files', files);
+  return true;
+}
+
+export function onFilesDropped(handler: (paths: string[]) => void): void {
+  if (inTauri) void listen<string[]>('files-dropped', (event) => handler(event.payload));
 }
 
 /** Ask the user for a file and read it. Resolves `null` if cancelled. */
@@ -272,6 +295,11 @@ export function onCloseRequested(handler: () => Promise<boolean>): void {
 export async function closeWindow(): Promise<void> {
   if (inTauri) await getCurrentWindow().close();
   else window.close();
+}
+
+export async function writeClipboardText(text: string): Promise<void> {
+  if (inTauri) await writeText(text);
+  else await navigator.clipboard.writeText(text);
 }
 
 /** Through Tauri: the webview's own clipboard API asks for permission. */

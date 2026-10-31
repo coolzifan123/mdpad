@@ -33,6 +33,7 @@ export const keymap: Record<string, string> = {
   'Mod+=': 'heading-up',
   'Mod+-': 'heading-down',
   'Mod+T': 'table',
+  'Mod+Enter': 'table-row-below',
   'Mod+Shift+K': 'code-block',
   'Mod+Shift+M': 'math-block',
   'Mod+Shift+Q': 'quote',
@@ -80,6 +81,15 @@ export const textCommands = new Set([
   'heading-up',
   'heading-down',
   'table',
+  'table-row-above',
+  'table-row-below',
+  'table-col-left',
+  'table-col-right',
+  'table-delete-row',
+  'table-delete-col',
+  'table-align-left',
+  'table-align-center',
+  'table-align-right',
   'code-block',
   'math-block',
   'quote',
@@ -136,6 +146,7 @@ function keyName(event: KeyboardEvent): string | null {
     Comma: ',',
   };
   if (symbols[code]) return symbols[code];
+  if (event.key === 'Enter') return 'Enter';
   if (/^F\d+$/.test(event.key)) return event.key;
   return null;
 }

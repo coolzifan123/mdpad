@@ -20,7 +20,29 @@ export interface PageOptions {
 }
 
 export async function toHtmlPage(markdown: string, { title, resolveImage }: PageOptions): Promise<string> {
-  const body = await unified()
+  const body = await toHtml(markdown, resolveImage);
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<title>${escapeHtml(title)}</title>`,
+    `<style>${PAGE_STYLE}</style>`,
+    '</head>',
+    '<body>',
+    '<main class="document">',
+    body,
+    '</main>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
+}
+
+/** Just the HTML for `markdown` (Edit > Copy as HTML Code). */
+export async function toHtml(markdown: string, resolveImage?: PageOptions['resolveImage']): Promise<string> {
+  const html = await unified()
     .use(remarkParse)
     // Front matter is metadata: left out of the page.
     .use(remarkFrontmatter, ['yaml'])
@@ -34,23 +56,7 @@ export async function toHtmlPage(markdown: string, { title, resolveImage }: Page
     .use(() => (tree: HtmlNode) => rewriteImages(tree, resolveImage))
     .use(rehypeStringify, { allowDangerousHtml: true })
     .process(markdown);
-  return [
-    '<!doctype html>',
-    '<html lang="en">',
-    '<head>',
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<title>${escapeHtml(title)}</title>`,
-    `<style>${PAGE_STYLE}</style>`,
-    '</head>',
-    '<body>',
-    '<main class="document">',
-    String(body),
-    '</main>',
-    '</body>',
-    '</html>',
-    '',
-  ].join('\n');
+  return String(html);
 }
 
 /** ==text== becomes <mark>text</mark>. */

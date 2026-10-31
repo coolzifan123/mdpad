@@ -22,7 +22,16 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from '@milkdown/kit/preset/commonmark';
-import { insertTableCommand, toggleStrikethroughCommand } from '@milkdown/kit/preset/gfm';
+import {
+  addColAfterCommand,
+  addColBeforeCommand,
+  addRowAfterCommand,
+  addRowBeforeCommand,
+  insertTableCommand,
+  setAlignCommand,
+  toggleStrikethroughCommand,
+} from '@milkdown/kit/preset/gfm';
+import { deleteColumn, deleteRow } from '@milkdown/kit/prose/tables';
 import { Fragment, Slice, type Node as ProseNode } from '@milkdown/kit/prose/model';
 import { AllSelection, TextSelection } from '@milkdown/kit/prose/state';
 import { $remark, callCommand } from '@milkdown/kit/utils';
@@ -30,6 +39,7 @@ import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame.css';
 import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 import { frontmatter } from './frontmatter';
+import { autopairPlugin } from './autopair';
 import { emojiInputRule } from './emoji';
 import { highlight, highlightHandler, toggleHighlightCommand } from './highlight';
 import { imageHandler, useImageBlocks } from './image-blocks';
@@ -71,6 +81,8 @@ export interface MarkdownEditor {
   revealHeading(index: number): void;
   /** The heading whose section is at the top of `scroller`, or -1. */
   currentHeading(scroller: HTMLElement): number;
+  /** The selected part as Markdown; "" when nothing is selected. */
+  selectionMarkdown(): string;
   /**
    * Run an editing command such as "bold" or "heading-2" (see `textCommands`
    * in keymap.ts). `arg` is the URL for "link", { src, alt } for "image" and
@@ -151,6 +163,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(markersPlugin)
     .use(highlight)
     .use(emojiInputRule)
+    .use(autopairPlugin)
     // Code blocks in "mermaid" show the diagram (math blocks already show
     // their formula this way).
     .config((ctx) =>
@@ -280,6 +293,15 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     'code-block': () => call(createCodeBlockCommand, ''),
     'math-block': () => call(createCodeBlockCommand, 'LaTeX'),
     table: () => call(insertTableCommand, { row: 3, col: 3 }),
+    'table-row-above': () => call(addRowBeforeCommand),
+    'table-row-below': () => call(addRowAfterCommand),
+    'table-col-left': () => call(addColBeforeCommand),
+    'table-col-right': () => call(addColAfterCommand),
+    'table-delete-row': () => deleteRow(view.state, view.dispatch),
+    'table-delete-col': () => deleteColumn(view.state, view.dispatch),
+    'table-align-left': () => call(setAlignCommand, 'left'),
+    'table-align-center': () => call(setAlignCommand, 'center'),
+    'table-align-right': () => call(setAlignCommand, 'right'),
     hr: () => call(insertHrCommand),
     link: (href) => typeof href === 'string' && link(href),
     image: (image) => call(insertImageCommand, image as { src: string; alt?: string }),
@@ -319,6 +341,10 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)));
       view.focus();
       el.scrollIntoView({ block: 'start' });
+    },
+    selectionMarkdown: () => {
+      const { from, to, empty } = view.state.selection;
+      return empty ? '' : serializer(view.state.doc.cut(from, to)).trim();
     },
     currentHeading: (scroller) => {
       // A heading near the top of the view counts as the one being read.
@@ -447,6 +473,7 @@ function createSourceEditor(options: EditorOptions): MarkdownEditor {
     mode: 'source',
     getMarkdown: () => textarea.value,
     headings: () => sourceHeadings().map(({ level, text }) => ({ level, text })),
+    selectionMarkdown: () => textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
     revealHeading: (index) => {
       const heading = sourceHeadings()[index];
       if (!heading) return;
