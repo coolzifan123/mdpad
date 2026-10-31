@@ -101,12 +101,61 @@ fn modified_ms(path: &str) -> u64 {
         .unwrap_or(0)
 }
 
-/// Opens another MdPad window (a new copy of the program).
+/// Opens another MdPad window (a new copy of the program), optionally with
+/// a file.
 #[tauri::command]
-fn new_window() -> Result<(), String> {
+fn new_window(path: Option<String>) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    std::process::Command::new(exe).spawn().map_err(|e| e.to_string())?;
+    let mut command = std::process::Command::new(exe);
+    if let Some(path) = path {
+        command.arg(path);
+    }
+    command.spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Files dropped on the window. The page can't see where a dropped file is,
+/// so it passes the files to WebView2 with
+/// `chrome.webview.postMessageWithAdditionalObjects`, which tells us their
+/// paths; we send them back as a "files-dropped" event. (Tauri's own
+/// file-drop handling stays off: it would stop dragging inside the editor.)
+#[cfg(windows)]
+fn listen_for_dropped_files(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use tauri::Emitter;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2File, ICoreWebView2WebMessageReceivedEventArgs2};
+    use webview2_com::WebMessageReceivedEventHandler;
+    use windows::core::{Interface, PWSTR};
+
+    let app = window.app_handle().clone();
+    window.with_webview(move |webview| unsafe {
+        let Ok(core) = webview.controller().CoreWebView2() else {
+            return;
+        };
+        let handler = WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args.and_then(|a| a.cast::<ICoreWebView2WebMessageReceivedEventArgs2>().ok()) else {
+                return Ok(());
+            };
+            let Ok(objects) = args.AdditionalObjects() else {
+                return Ok(());
+            };
+            let mut count = 0;
+            objects.Count(&mut count)?;
+            let mut paths = Vec::new();
+            for i in 0..count {
+                if let Ok(file) = objects.GetValueAtIndex(i)?.cast::<ICoreWebView2File>() {
+                    let mut path = PWSTR::null();
+                    file.Path(&mut path)?;
+                    paths.push(webview2_com::take_pwstr(path));
+                }
+            }
+            if !paths.is_empty() {
+                let _ = app.emit("files-dropped", paths);
+            }
+            Ok(())
+        }));
+        let mut token = 0i64;
+        let _ = core.add_WebMessageReceived(&handler, &mut token);
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -358,7 +407,9 @@ pub fn run() {
             if let Some(port) = debug_port() {
                 window = window.additional_browser_args(&format!("{WEBVIEW_DEFAULT_ARGS} --remote-debugging-port={port}"));
             }
-            window.build()?;
+            let window = window.build()?;
+            #[cfg(windows)]
+            listen_for_dropped_files(&window)?;
             Ok(())
         })
         .run(tauri::generate_context!())
