@@ -28,10 +28,9 @@ import {
   addRowAfterCommand,
   addRowBeforeCommand,
   insertTableCommand,
-  setAlignCommand,
   toggleStrikethroughCommand,
 } from '@milkdown/kit/preset/gfm';
-import { deleteColumn, deleteRow } from '@milkdown/kit/prose/tables';
+import { deleteColumn, deleteRow, isInTable, selectedRect } from '@milkdown/kit/prose/tables';
 import { Fragment, Slice, type Node as ProseNode } from '@milkdown/kit/prose/model';
 import { AllSelection, TextSelection } from '@milkdown/kit/prose/state';
 import { $remark, callCommand } from '@milkdown/kit/utils';
@@ -247,6 +246,26 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     return true;
   };
 
+  /**
+   * In Markdown a table's alignment is per column (the `:-:` row), so align
+   * every cell in the selected columns, not just the selected cells.
+   */
+  const alignColumns = (alignment: 'left' | 'center' | 'right') => {
+    const { state } = view;
+    if (!isInTable(state)) return false;
+    const { map, table, tableStart, left, right } = selectedRect(state);
+    const tr = state.tr;
+    for (let row = 0; row < map.height; row++) {
+      for (let col = left; col < right; col++) {
+        const pos = map.map[row * map.width + col];
+        const cell = table.nodeAt(pos);
+        if (cell) tr.setNodeMarkup(tableStart + pos, undefined, { ...cell.attrs, alignment });
+      }
+    }
+    view.dispatch(tr);
+    return true;
+  };
+
   const link = (href: string) => {
     const { state } = view;
     if (state.selection.empty) {
@@ -299,9 +318,9 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     'table-col-right': () => call(addColAfterCommand),
     'table-delete-row': () => deleteRow(view.state, view.dispatch),
     'table-delete-col': () => deleteColumn(view.state, view.dispatch),
-    'table-align-left': () => call(setAlignCommand, 'left'),
-    'table-align-center': () => call(setAlignCommand, 'center'),
-    'table-align-right': () => call(setAlignCommand, 'right'),
+    'table-align-left': () => alignColumns('left'),
+    'table-align-center': () => alignColumns('center'),
+    'table-align-right': () => alignColumns('right'),
     hr: () => call(insertHrCommand),
     link: (href) => typeof href === 'string' && link(href),
     image: (image) => call(insertImageCommand, image as { src: string; alt?: string }),
