@@ -26,7 +26,7 @@ GitHub needs the private key as a repository secret named
 `TAURI_SIGNING_PRIVATE_KEY`:
 
 ```powershell
-gh secret set TAURI_SIGNING_PRIVATE_KEY -R coolzifan123/mdpad -f "$HOME\.tauri\mdpad-updater.key"
+Get-Content "$HOME\.tauri\mdpad-updater.key" -Raw | gh secret set TAURI_SIGNING_PRIVATE_KEY -R coolzifan123/mdpad
 ```
 
 (or paste the file's contents under Settings → Secrets and variables →
