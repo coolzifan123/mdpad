@@ -703,6 +703,38 @@ body {
   opacity: 0.75;
 }
 
+/* The text between them, styled as it will look. */
+.milkdown .ProseMirror .md-strong {
+  font-weight: bold;
+}
+
+.milkdown .ProseMirror .md-em {
+  font-style: italic;
+}
+
+.milkdown .ProseMirror .md-strike {
+  text-decoration: line-through;
+}
+
+.milkdown .ProseMirror .md-code {
+  color: var(--crepe-color-inline-code);
+  font-family: var(--crepe-font-code);
+  font-size: 87.5%;
+}
+
+.milkdown .ProseMirror .md-link {
+  color: var(--crepe-color-primary);
+  text-decoration: underline;
+}
+
+.milkdown .ProseMirror .md-mark {
+  background: #fff3a3;
+}
+
+:root[data-theme='dark'] .milkdown .ProseMirror .md-mark {
+  background: #6b5d1e;
+}
+
 /* [TOC] */
 .milkdown .ProseMirror .toc-marker {
   color: var(--app-fg-muted);

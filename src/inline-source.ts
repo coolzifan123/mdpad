@@ -58,7 +58,18 @@ interface Layout {
   shownAt: number[];
   /** The rest of the Markdown: [start, end) ranges of symbols. */
   symbols: [number, number][];
+  /** For each character shown, the classes that style it like its formatting ("md-strong"…). */
+  styles: string[];
 }
+
+/** Classes for the text inside written-out Markdown, so it still looks bold, italic… */
+const STYLE: Record<string, string> = {
+  strong: 'md-strong',
+  emphasis: 'md-em',
+  delete: 'md-strike',
+  inlineCode: 'md-code',
+  link: 'md-link',
+};
 
 interface MdNode {
   type: string;
@@ -134,24 +145,32 @@ export function createInlineSource(): InlineSource {
     const cached = layouts.get(markdown);
     if (cached) return cached;
     const shownAt: number[] = [];
-    const walk = (node: MdNode) => {
+    const styles: string[] = [];
+    const show = (at: number, style: string[]) => {
+      shownAt.push(at);
+      styles.push(style.join(' '));
+    };
+    const walk = (node: MdNode, style: string[]) => {
       const start = node.position?.start.offset ?? 0;
       const end = node.position?.end.offset ?? start;
+      if (STYLE[node.type]) style = [...style, STYLE[node.type]];
       if (node.type === 'text' && node.value !== undefined) {
-        shownAt.push(...textLayout(markdown.slice(start, end), node.value, start));
+        for (const { at, marked } of textLayout(markdown.slice(start, end), node.value, start)) {
+          show(at, marked ? [...style, 'md-mark'] : style);
+        }
       } else if ((node.type === 'inlineCode' || node.type === 'inlineMath') && node.value !== undefined) {
         const at = Math.max(0, markdown.slice(start, end).indexOf(node.value));
-        for (let i = 0; i < node.value.length; i++) shownAt.push(start + at + i);
+        for (let i = 0; i < node.value.length; i++) show(start + at + i, style);
       } else if (node.type === 'html') {
-        for (let i = start; i < end; i++) shownAt.push(i);
+        for (let i = start; i < end; i++) show(i, style);
       } else if (node.children) {
-        node.children.forEach(walk);
+        node.children.forEach((child) => walk(child, style));
       } else if (node.type !== 'root') {
         // An image, a line break, a footnote reference…: one position.
-        shownAt.push(start);
+        show(start, style);
       }
     };
-    walk(ctx!.get(remarkCtx).parse(markdown) as unknown as MdNode);
+    walk(ctx!.get(remarkCtx).parse(markdown) as unknown as MdNode, []);
     const shown = new Set(shownAt);
     const symbols: [number, number][] = [];
     for (let i = 0; i < markdown.length; i++) {
@@ -161,7 +180,7 @@ export function createInlineSource(): InlineSource {
       else symbols.push([i, i + 1]);
     }
     if (layouts.size > 500) layouts.clear();
-    const result = { shownAt, symbols };
+    const result = { shownAt, symbols, styles };
     layouts.set(markdown, result);
     return result;
   }
@@ -460,6 +479,11 @@ export function createInlineSource(): InlineSource {
     return tr;
   }
 
+  /** Redraw after a moment; the editor may be gone by then (a Ctrl+clicked link can open another file). */
+  const refreshLater = (view: EditorView) => {
+    if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(key, REFRESH));
+  };
+
   const plugin = $prose((pluginCtx) => {
     ctx = pluginCtx;
     return new Plugin<PluginState>({
@@ -491,8 +515,19 @@ export function createInlineSource(): InlineSource {
             const block = pos >= 0 && pos < state.doc.content.size ? state.doc.nodeAt(pos) : null;
             if (!block?.isTextblock) continue;
             for (const group of groupsIn(block, pos + 1)) {
-              const symbols = group.prefix ? [[0, group.text.length]] : layout(group.text).symbols;
+              if (group.prefix) {
+                decorations.push(Decoration.inline(group.from, group.to, { class: 'md-symbol' }));
+                continue;
+              }
+              const { symbols, shownAt, styles } = layout(group.text);
               for (const [start, end] of symbols) decorations.push(Decoration.inline(group.from + start, group.from + end, { class: 'md-symbol' }));
+              // The text in between looks as it will: bold, italic…
+              for (let i = 0; i < shownAt.length; ) {
+                let j = i + 1;
+                while (j < shownAt.length && styles[j] === styles[i] && shownAt[j] === shownAt[j - 1] + 1) j++;
+                if (styles[i]) decorations.push(Decoration.inline(group.from + shownAt[i], group.from + shownAt[j - 1] + 1, { class: styles[i] }));
+                i = j;
+              }
             }
           }
           return DecorationSet.create(state.doc, decorations);
@@ -510,7 +545,7 @@ export function createInlineSource(): InlineSource {
             return false;
           },
           click: (view) => {
-            if (linkClick) setTimeout(() => ((linkClick = false), view.dispatch(view.state.tr.setMeta(key, REFRESH))));
+            if (linkClick) setTimeout(() => ((linkClick = false), refreshLater(view)));
             return false;
           },
           compositionstart: () => {
@@ -519,7 +554,7 @@ export function createInlineSource(): InlineSource {
           },
           compositionend: (view) => {
             composing = false;
-            setTimeout(() => view.dispatch(view.state.tr.setMeta(key, REFRESH)));
+            setTimeout(() => refreshLater(view));
             return false;
           },
         },
@@ -561,7 +596,7 @@ export function createInlineSource(): InlineSource {
 }
 
 /** Where the characters of a text node's `value` are in its Markdown (`source`, starting at `offset`). */
-function textLayout(source: string, value: string, offset: number): number[] {
+function textLayout(source: string, value: string, offset: number): { at: number; marked: boolean }[] {
   // Escapes ("\*") and entities ("&amp;") are longer in the Markdown.
   const at: number[] = [];
   let j = 0;
@@ -574,9 +609,11 @@ function textLayout(source: string, value: string, offset: number): number[] {
   while (at.length < value.length) at.push(offset + source.length);
   // The "==" around highlighted text are symbols too (see highlight.ts).
   const hidden = new Set<number>();
+  const marked = new Set<number>();
   for (const match of value.matchAll(HIGHLIGHT)) {
     const end = match.index + match[0].length;
     for (const i of [match.index, match.index + 1, end - 2, end - 1]) hidden.add(i);
+    for (let i = match.index + 2; i < end - 2; i++) marked.add(i);
   }
-  return hidden.size ? at.filter((_, i) => !hidden.has(i)) : at;
+  return at.flatMap((position, i) => (hidden.has(i) ? [] : [{ at: position, marked: marked.has(i) }]));
 }
