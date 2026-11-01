@@ -7,15 +7,19 @@ A free, open-source, Typora-like Markdown editor built with
 
 - **Live preview** editing like Typora: type `# `, `**bold**`, `- `, `> `… and
   the formatting appears. At the cursor, formatted text shows its Markdown
-  (`**bold**`, `## `, `[text](url)`), which you can edit directly
+  (`**bold**`, `## `, `[text](url)`, `![picture](path)`, `$x^2$`), which
+  you can edit directly
 - Tables, task lists, highlighted code, math, Mermaid diagrams, footnotes,
-  `[TOC]`, `==highlight==`, emoji shortcodes (`:smile:`), YAML front matter
-- **Sidebar** with the document outline and a folder's files; Quick Open
-- **Find and replace**, spell check, focus and typewriter modes, zoom
+  `[TOC]`, `==highlight==`, emoji (`:smile:`, with a picker), YAML front matter
+- **Sidebar** with the document outline, a folder's files, and search in all
+  of them; Quick Open
+- **Find and replace** with whole word and regular expressions, spell check,
+  focus and typewriter modes, zoom
 - Export to **HTML** and **PDF**, print
 - **Saves carefully**: parts of a file you didn't edit stay exactly as they
   were, with their line endings and encoding (UTF-8, GBK, UTF-16)
 - Recent files, auto save, light/dark and custom CSS themes, Preferences
+- **Unsaved changes survive a crash**: the next start offers to restore them
 - Updates itself from GitHub Releases
 
 | Shortcut | Action | Shortcut | Action |
@@ -23,6 +27,7 @@ A free, open-source, Typora-like Markdown editor built with
 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` | New / Open / Save | `Ctrl+1`…`6`, `Ctrl+0` | Heading, paragraph |
 | `Ctrl+P` | Quick Open | `Ctrl+B` / `I` / `K` | Bold / italic / link |
 | `Ctrl+F` / `Ctrl+H` | Find / replace | `Ctrl+T` | Table |
+| `Ctrl+Shift+F` | Search in folder | `Ctrl+Enter` | Table row below |
 | `Ctrl+Shift+L` | Sidebar | `Ctrl+Shift+K` / `M` | Code / math block |
 | `Ctrl+/` | Source mode | `Ctrl+Shift+H` | Highlight |
 | `F8` / `F9` / `F11` | Focus / typewriter / full screen | `Ctrl+,` | Preferences |
