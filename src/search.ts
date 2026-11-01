@@ -42,7 +42,7 @@ interface Match {
 const NO_OPTIONS: SearchOptions = { matchCase: false, wholeWord: false, regex: false };
 
 /** The pattern for a search, or null if `query` isn't a valid regular expression. */
-function patternFor(query: string, { matchCase, wholeWord, regex }: SearchOptions): RegExp | null {
+export function patternFor(query: string, { matchCase, wholeWord, regex }: SearchOptions): RegExp | null {
   const source = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const flags = matchCase ? 'g' : 'gi';
   try {

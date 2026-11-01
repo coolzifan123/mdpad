@@ -10,7 +10,7 @@ export interface MenuState {
   sourceMode: boolean;
   darkTheme: boolean;
   /** The sidebar panel showing, or null when the sidebar is closed. */
-  sidebar: 'files' | 'outline' | null;
+  sidebar: 'files' | 'outline' | 'search' | null;
   focusMode: boolean;
   typewriter: boolean;
   symbols: boolean;
@@ -88,6 +88,7 @@ export function buildMenus(state: () => MenuState): Menu[] {
         { label: 'Replace…', command: 'replace' },
         { label: 'Find Next', command: 'find-next' },
         { label: 'Find Previous', command: 'find-previous' },
+        { label: 'Search in Folder…', command: 'search-folder' },
       ],
     },
     {

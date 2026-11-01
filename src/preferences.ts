@@ -10,6 +10,8 @@ export interface Preferences {
   spellcheck: boolean;
   /** Typing "(" also adds ")", and so on. */
   autoPair: boolean;
+  /** Type *, _ and ` in pairs too. */
+  autoPairMarkdown: boolean;
   /** Folder next to a document where pasted images go. */
   imageFolder: string;
   /** Line endings of new files. */
@@ -24,6 +26,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorWidth: 900,
   spellcheck: true,
   autoPair: true,
+  autoPairMarkdown: false,
   imageFolder: 'assets',
   newFileLineEnding: 'system',
   checkUpdates: true,

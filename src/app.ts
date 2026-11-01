@@ -16,6 +16,7 @@ import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from '
 import { dueForCheck, offerUpdate, rememberCheck } from './updates';
 import { dropDraft, forgetDraft, keepDraft, leftoverDrafts, offerRestore, type Draft } from './drafts';
 import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
+import { FolderSearch } from './folder-search';
 import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
 import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
 import { writingModes } from './writing-modes';
@@ -95,6 +96,7 @@ export class App {
   private autoSaveTimer: number | undefined;
   private draftTimer: number | undefined;
   private readonly findBar: FindBar;
+  private readonly folderSearch: FolderSearch;
   private readonly sidebar: Sidebar;
   private readonly outline: Outline;
   private readonly fileTree: FileTree;
@@ -135,6 +137,10 @@ export class App {
     'toggle-sidebar': () => this.sidebar.toggle(),
     'show-outline': () => this.sidebar.toggleTab('outline'),
     'show-files': () => this.sidebar.toggleTab('files'),
+    'search-folder': () => {
+      this.sidebar.show('search');
+      this.folderSearch.focus();
+    },
     'open-folder': () => this.openFolder(),
     'quick-open': () => this.quickOpen(),
     'export-html': () => this.exportHtml(),
@@ -177,6 +183,14 @@ export class App {
       (path) => void this.run(() => this.openPath(path)),
       () => void this.run(() => this.openFolder()),
     );
+    this.folderSearch = new FolderSearch(ui.sidebar.panels.search, {
+      folder: () => this.fileTree.folder,
+      open: (path, query, options, index) =>
+        void this.run(async () => {
+          if (path !== this.doc.path) await this.openPath(path);
+          if (path === this.doc.path) this.findBar.find(query, options, index);
+        }),
+    });
     this.sidebar = new Sidebar(ui.sidebar, (tab) => this.fillSidebar(tab));
     new MenuBar(
       ui.menuBar,
@@ -461,6 +475,7 @@ export class App {
         fields: [
           { kind: 'checkbox', label: 'Check spelling', value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
           { kind: 'checkbox', label: 'Type brackets and quotes in pairs', value: this.prefs.autoPair, onChange: (autoPair) => set({ autoPair }) },
+          { kind: 'checkbox', label: 'Type *, _ and ` in pairs', value: this.prefs.autoPairMarkdown, onChange: (autoPairMarkdown) => set({ autoPairMarkdown }) },
           { kind: 'checkbox', label: 'Show Markdown symbols at the cursor', value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
           { kind: 'checkbox', label: 'Focus mode', value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
           { kind: 'checkbox', label: 'Typewriter mode', value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
@@ -542,6 +557,7 @@ export class App {
   private applySpellcheck(): void {
     this.ui.host.querySelector('.ProseMirror, .source-editor')?.setAttribute('spellcheck', String(this.prefs.spellcheck));
     autopairSettings.enabled = this.prefs.autoPair;
+    autopairSettings.markdown = this.prefs.autoPairMarkdown;
   }
 
   /** Change and remember view settings, and show them. */
@@ -630,7 +646,7 @@ export class App {
   /** Fill the sidebar panel that is about to show. */
   private fillSidebar(tab: SidebarTab): void {
     if (tab === 'outline') this.updateOutline();
-    else void this.fileTree.render();
+    else if (tab === 'files') void this.fileTree.render();
   }
 
   private updateOutline(): void {

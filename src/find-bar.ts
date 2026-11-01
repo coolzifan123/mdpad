@@ -88,6 +88,24 @@ export class FindBar {
     this.refresh();
   }
 
+  /** Open the bar on `query` and go to its match number `index` (for search in a folder). */
+  find(query: string, options: SearchOptions, index: number): void {
+    this.options = { ...options };
+    for (const option of Object.keys(options) as (keyof SearchOptions)[]) {
+      const button = { matchCase: this.ui.matchCase, wholeWord: this.ui.wholeWord, regex: this.ui.regex }[option];
+      button.setAttribute('aria-pressed', String(options[option]));
+    }
+    this.ui.input.value = query;
+    this.ui.bar.hidden = false;
+    this.ui.replaceRow.hidden = true;
+    const searcher = this.searcher();
+    if (!searcher) return;
+    const count = searcher.search(query, this.options);
+    this.current = count > 0 ? Math.min(index, count - 1) : -1;
+    if (this.current >= 0) searcher.show(this.current);
+    this.showCount();
+  }
+
   close(): void {
     if (!this.isOpen) return;
     this.ui.bar.hidden = true;

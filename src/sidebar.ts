@@ -1,7 +1,7 @@
-// The sidebar on the left, with the Files and Outline panels. Whether it's
+// The sidebar on the left, with the Files, Outline and Search panels. Whether it's
 // open, and which panel, is remembered.
 
-export type SidebarTab = 'files' | 'outline';
+export type SidebarTab = 'files' | 'outline' | 'search';
 
 export interface SidebarElements {
   sidebar: HTMLElement;
@@ -28,7 +28,7 @@ export class Sidebar {
     } catch {
       // Use the defaults.
     }
-    this.tab = saved.tab === 'files' ? 'files' : 'outline';
+    this.tab = saved.tab === 'files' || saved.tab === 'search' ? saved.tab : 'outline';
     this.apply(Boolean(saved.visible));
   }
 

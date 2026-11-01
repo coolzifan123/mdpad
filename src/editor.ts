@@ -148,7 +148,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
   // is in the file. Keep it, to save unedited blocks exactly as they were.
   let fileTree: SourceTree | null = null;
   // The Markdown at the cursor, shown and edited as text (like Typora).
-  const inlineSource = createInlineSource();
+  const inlineSource = createInlineSource({ resolveImage: options.resolveImage });
   const keepFileTree = $remark('keepFileTree', () => () => (tree, file) => {
     if (!fileTree && String(file.value) === options.markdown) fileTree = tree as unknown as SourceTree;
   });

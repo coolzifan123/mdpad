@@ -19,6 +19,7 @@ export const keymap: Record<string, string> = {
   'Mod+Shift+Z': 'redo',
   'Mod+F': 'find',
   'Mod+H': 'replace',
+  'Mod+Shift+F': 'search-folder',
   'F3': 'find-next',
   'Shift+F3': 'find-previous',
   'Mod+Shift+V': 'paste-plain',

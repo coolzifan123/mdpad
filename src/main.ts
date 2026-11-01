@@ -31,8 +31,8 @@ const app = new App({
   },
   sidebar: {
     sidebar: byId('sidebar'),
-    tabs: { files: byId('tab-files'), outline: byId('tab-outline') },
-    panels: { files: byId('files-panel'), outline: byId('outline-panel') },
+    tabs: { files: byId('tab-files'), outline: byId('tab-outline'), search: byId('tab-search') },
+    panels: { files: byId('files-panel'), outline: byId('outline-panel'), search: byId('search-panel') },
   },
 });
 

@@ -200,6 +200,126 @@ body {
   padding: 6px 0;
 }
 
+/* Search in a folder (folder-search.ts) */
+.folder-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 6px;
+}
+
+.folder-search-bar input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  outline: none;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font: inherit;
+  user-select: text;
+}
+
+.folder-search-bar input:focus {
+  border-color: var(--app-accent);
+}
+
+.folder-search-bar button {
+  min-width: 24px;
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.folder-search-bar button:hover,
+.folder-search-bar button[aria-pressed='true'] {
+  background: var(--app-hover);
+  color: var(--app-fg);
+}
+
+.folder-search-bar button.find-word {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.folder-search-status {
+  padding: 0 12px 6px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+}
+
+.folder-search-status.none {
+  color: #d1242f;
+}
+
+.folder-search-name,
+.folder-search-line,
+.folder-search-more {
+  overflow: hidden;
+  margin: 0 6px;
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-search-name {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.folder-search-where {
+  overflow: hidden;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+  font-weight: normal;
+  text-overflow: ellipsis;
+}
+
+.folder-search-count {
+  margin-left: auto;
+  color: var(--app-fg-muted);
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.folder-search-line {
+  padding: 2px 6px 2px 20px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.folder-search-name:hover,
+.folder-search-line:hover {
+  background: var(--app-hover);
+}
+
+.folder-search-line mark {
+  border-radius: 2px;
+  background: #fff3a3;
+  color: inherit;
+}
+
+:root[data-theme='dark'] .folder-search-line mark {
+  background: #6b5d1e;
+}
+
+.folder-search-more {
+  padding: 2px 6px 6px 20px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+}
+
 .sidebar-empty {
   margin: 12px;
   color: var(--app-fg-muted);
@@ -722,6 +842,30 @@ body {
   font-style: normal;
   font-weight: normal;
   opacity: 0.75;
+}
+
+/* A picture or formula shown next to its Markdown while it's edited. */
+.milkdown .ProseMirror .md-preview {
+  user-select: none;
+}
+
+.milkdown .ProseMirror .md-preview-image {
+  display: block;
+  margin: 6px 0;
+}
+
+.milkdown .ProseMirror .md-preview-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 4px;
+}
+
+.milkdown .ProseMirror .md-preview-math {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--app-hover);
 }
 
 /* The text between them, styled as it will look. */

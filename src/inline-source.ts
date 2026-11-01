@@ -1,7 +1,8 @@
 // Editable Markdown symbols, like Typora. When the cursor is in formatted
 // text, that text turns into the Markdown it is written as — "**bold**",
-// "[text](url)", and "## " before a heading — which can be edited like any
-// other text; the symbols are shown in grey. When the cursor leaves, the text
+// "[text](url)", "## " before a heading, "![alt](picture.png)", "$x^2$" —
+// which can be edited like any other text; the symbols are shown in grey, and
+// a picture or formula is previewed next to its Markdown. When the cursor leaves, the text
 // is read as Markdown again. Text that wasn't changed gets its formatting
 // back exactly as it was, so just moving the cursor never changes the file.
 //
@@ -13,7 +14,7 @@
 import { parserCtx, remarkCtx, serializerCtx } from '@milkdown/kit/core';
 import type { Ctx, MilkdownPlugin } from '@milkdown/kit/ctx';
 import { Fragment, type Mark, type MarkType, type Node as ProseNode } from '@milkdown/kit/prose/model';
-import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@milkdown/kit/prose/state';
+import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@milkdown/kit/prose/state';
 import type { Mapping } from '@milkdown/kit/prose/transform';
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view';
 import { $markSchema, $prose } from '@milkdown/kit/utils';
@@ -24,6 +25,8 @@ export const inlineSourceSettings = { enabled: true };
 
 /** Formatting written with symbols around the text. */
 const FORMATTING = new Set(['strong', 'emphasis', 'inlineCode', 'strike_through', 'highlight', 'link']);
+/** Inline nodes that are written as Markdown too (they have no text of their own). */
+const ATOMS = new Set(['image', 'math_inline']);
 const HEADING_PREFIX = /^(#{1,6}) $/;
 
 /** Markdown that was written out for the cursor, and how to undo that. */
@@ -33,6 +36,8 @@ interface Part {
   symbols: [number, number][];
   /** The formatting of the text without the symbols: [from, to, marks]. */
   marks: [number, number, readonly Mark[]][];
+  /** With a picture or formula: what was there, put back as it was. */
+  nodes?: Fragment;
 }
 
 /** A stretch of Markdown text in a block (positions in the document). */
@@ -61,6 +66,8 @@ interface Layout {
   symbols: [number, number][];
   /** For each character shown, the classes that style it like its formatting ("md-strong"…). */
   styles: string[];
+  /** A picture or formula to show next to the Markdown. */
+  preview: { image: string } | { math: string } | null;
 }
 
 /** Classes for the text inside written-out Markdown, so it still looks bold, italic… */
@@ -75,6 +82,8 @@ const STYLE: Record<string, string> = {
 interface MdNode {
   type: string;
   value?: string;
+  url?: string;
+  alt?: string | null;
   children?: MdNode[];
   position?: { start: { offset?: number }; end: { offset?: number } };
 }
@@ -119,7 +128,12 @@ export interface InlineSource {
   shownText(block: ProseNode): string;
 }
 
-export function createInlineSource(): InlineSource {
+export interface InlineSourceOptions {
+  /** A picture's address as the editor can show it (relative paths…). */
+  resolveImage?: (src: string) => Promise<string> | string;
+}
+
+export function createInlineSource(options: InlineSourceOptions = {}): InlineSource {
   let ctx: Ctx | null = null;
   let nextId = 1;
   const parts = new Map<number, Part>();
@@ -150,9 +164,20 @@ export function createInlineSource(): InlineSource {
     if (cached) return cached;
     const shownAt: number[] = [];
     const styles: string[] = [];
+    /** Characters that aren't symbols. */
+    const plain = new Set<number>();
+    let preview: Layout['preview'] = null;
     const show = (at: number, style: string[]) => {
       shownAt.push(at);
       styles.push(style.join(' '));
+      plain.add(at);
+    };
+    /** A picture or formula: one position in the editor, `text` is not grey. */
+    const atom = (start: number, end: number, text: string, style: string[]) => {
+      shownAt.push(start);
+      styles.push(style.join(' '));
+      const at = text ? markdown.slice(start, end).indexOf(text) : -1;
+      if (at >= 0) for (let i = 0; i < text.length; i++) plain.add(start + at + i);
     };
     const walk = (node: MdNode, style: string[]) => {
       const start = node.position?.start.offset ?? 0;
@@ -162,9 +187,15 @@ export function createInlineSource(): InlineSource {
         for (const { at, marked } of textLayout(markdown.slice(start, end), node.value, start)) {
           show(at, marked ? [...style, 'md-mark'] : style);
         }
-      } else if ((node.type === 'inlineCode' || node.type === 'inlineMath') && node.value !== undefined) {
+      } else if (node.type === 'inlineCode' && node.value !== undefined) {
         const at = Math.max(0, markdown.slice(start, end).indexOf(node.value));
         for (let i = 0; i < node.value.length; i++) show(start + at + i, style);
+      } else if (node.type === 'inlineMath') {
+        atom(start, end, node.value ?? '', style);
+        preview ??= { math: node.value ?? '' };
+      } else if (node.type === 'image') {
+        atom(start, end, node.alt ?? '', style);
+        preview ??= { image: node.url ?? '' };
       } else if (node.type === 'html') {
         for (let i = start; i < end; i++) show(i, style);
       } else if (node.children) {
@@ -175,16 +206,15 @@ export function createInlineSource(): InlineSource {
       }
     };
     walk(ctx!.get(remarkCtx).parse(markdown) as unknown as MdNode, []);
-    const shown = new Set(shownAt);
     const symbols: [number, number][] = [];
     for (let i = 0; i < markdown.length; i++) {
-      if (shown.has(i)) continue;
+      if (plain.has(i)) continue;
       const last = symbols[symbols.length - 1];
       if (last && last[1] === i) last[1] = i + 1;
       else symbols.push([i, i + 1]);
     }
     if (layouts.size > 500) layouts.clear();
-    const result = { shownAt, symbols, styles };
+    const result = { shownAt, symbols, styles, preview };
     layouts.set(markdown, result);
     return result;
   }
@@ -222,7 +252,9 @@ export function createInlineSource(): InlineSource {
     const kids: { node: ProseNode; from: number; to: number }[] = [];
     block.forEach((node, from) => kids.push({ node, from, to: from + node.nodeSize }));
     const formatting = (node: ProseNode) => node.marks.filter((m) => FORMATTING.has(m.type.name));
-    const touching = kids.flatMap((kid, i) => (kid.from <= offset && offset <= kid.to && formatting(kid.node).length ? [i] : []));
+    const touching = kids.flatMap((kid, i) =>
+      kid.from <= offset && offset <= kid.to && (formatting(kid.node).length || ATOMS.has(kid.node.type.name)) ? [i] : [],
+    );
     if (!touching.length) return null;
     let first = touching[0];
     let last = touching[touching.length - 1];
@@ -236,8 +268,17 @@ export function createInlineSource(): InlineSource {
         }
       }
     }
-    for (let i = first; i <= last; i++) if (!kids[i].node.isText) return null;
+    for (let i = first; i <= last; i++) if (!kids[i].node.isText && !ATOMS.has(kids[i].node.type.name)) return null;
     return [kids[first].from, kids[last].to];
+  }
+
+  /** Whether [from, to) has a picture or formula in it. */
+  function hasAtom(doc: ProseNode, from: number, to: number): boolean {
+    let found = false;
+    doc.nodesBetween(from, to, (node) => {
+      found ||= ATOMS.has(node.type.name);
+    });
+    return found;
   }
 
   /** How the formatted text [from, to) is written in Markdown, if it can be shown that way. */
@@ -281,9 +322,22 @@ export function createInlineSource(): InlineSource {
    * if `outside` (the formatting was just finished by typing "**").
    */
   function expandRun(state: EditorState, tr: Transaction, from: number, to: number, cursor: number, outside: boolean): number {
+    const content = tr.doc.slice(from, to).content;
+    let hasAtom = false;
+    content.forEach((node) => (hasAtom ||= ATOMS.has(node.type.name)));
+    if (hasAtom) {
+      // No text to keep: replace it all, and put it back as it was. The
+      // cursor goes before or after the Markdown, as it was before or after
+      // the picture.
+      const markdown = inlineMarkdown(state, content);
+      const id = nextId++;
+      parts.set(id, { source: markdown, symbols: layout(markdown).symbols, marks: [], nodes: content });
+      tr.replaceWith(from, to, state.schema.text(markdown, [markTypes().source.create({ id })]));
+      return cursor <= from ? from : from + markdown.length;
+    }
     const plan = planRun(state, tr.doc, from, to);
     if (!plan) return cursor;
-    const { content, markdown, shownAt, symbols } = plan;
+    const { markdown, shownAt, symbols } = plan;
     const marks: Part['marks'] = [];
     content.forEach((node, offset) => marks.push([offset, offset + node.nodeSize, node.marks]));
     const id = nextId++;
@@ -324,6 +378,10 @@ export function createInlineSource(): InlineSource {
   function collapseExact(tr: Transaction, group: Group, part: Part): void {
     const { source, prefix } = markTypes();
     const { from } = group;
+    if (part.nodes) {
+      tr.replaceWith(from, group.to, part.nodes);
+      return;
+    }
     for (const [start, end] of [...part.symbols].reverse()) tr.delete(from + start, from + end);
     const length = part.source.length - part.symbols.reduce((sum, [start, end]) => sum + end - start, 0);
     tr.removeMark(from, from + length, group.prefix ? prefix : source);
@@ -403,6 +461,7 @@ export function createInlineSource(): InlineSource {
     const { selection } = state;
     const { $anchor, $head } = selection;
     const block = $head.parent;
+    const atomSelected = selection instanceof NodeSelection && ATOMS.has(selection.node.type.name);
     const editable = block.isTextblock && !block.type.spec.code && $anchor.sameParent($head) && !linkClick;
     const target = inlineSourceSettings.enabled && editable ? $head.before() : -1;
     const blocks = expandedBlocks(state, hint).sort((a, b) => b - a);
@@ -418,7 +477,7 @@ export function createInlineSource(): InlineSource {
     if (target >= 0) {
       const at = tr.mapping.map(target);
       const start = at + 1;
-      const head = tr.mapping.map($head.pos);
+      const head = tr.mapping.map(atomSelected ? selection.from : $head.pos);
       let node = tr.doc.nodeAt(at)!;
       const groups = groupsIn(node, start);
       const prefixGroup = groups[0]?.prefix && groups[0].from === start ? groups[0] : null;
@@ -438,11 +497,11 @@ export function createInlineSource(): InlineSource {
       }
       node = tr.doc.nodeAt(at)!;
 
-      if (selection.empty) {
+      if (selection.empty || atomSelected) {
         const runs = groups.filter((g) => !g.prefix);
         const inRun = runs.some((g) => g.from <= head && head <= g.to);
         const range = inRun ? null : formattedRange(node, head - start);
-        const wantsRun = !!range && !!planRun(state, tr.doc, start + range[0], start + range[1]);
+        const wantsRun = !!range && (hasAtom(tr.doc, start + range[0], start + range[1]) || !!planRun(state, tr.doc, start + range[0], start + range[1]));
         const strayRun = runs.some((g) => !(g.from <= head && head <= g.to));
         const wantsPrefix = node.type.name === 'heading' && !prefixGroup;
         if (wantsRun || strayRun || wantsPrefix) {
@@ -493,6 +552,27 @@ export function createInlineSource(): InlineSource {
     return tr;
   }
 
+  /** The picture or formula being written, shown next to its Markdown. */
+  function previewOf(state: EditorState, preview: NonNullable<Layout['preview']>): HTMLElement {
+    const box = document.createElement('span');
+    box.contentEditable = 'false';
+    if ('image' in preview) {
+      box.className = 'md-preview md-preview-image';
+      const img = document.createElement('img');
+      img.alt = '';
+      void Promise.resolve(options.resolveImage ? options.resolveImage(preview.image) : preview.image).then((src) => (img.src = src));
+      box.append(img);
+    } else {
+      // Drawn by the formula's own node (KaTeX).
+      box.className = 'md-preview md-preview-math';
+      const type = state.schema.nodes.math_inline;
+      const dom = type?.spec.toDOM?.(type.create({ value: preview.math }));
+      if (dom instanceof HTMLElement) box.append(dom);
+      else box.textContent = preview.math;
+    }
+    return box;
+  }
+
   /** Redraw after a moment; the editor may be gone by then (a Ctrl+clicked link can open another file). */
   const refreshLater = (view: EditorView) => {
     if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(key, REFRESH));
@@ -533,8 +613,12 @@ export function createInlineSource(): InlineSource {
                 decorations.push(Decoration.inline(group.from, group.to, { class: 'md-symbol' }));
                 continue;
               }
-              for (const [start, end] of layout(group.text).symbols) {
+              const { symbols, preview } = layout(group.text);
+              for (const [start, end] of symbols) {
                 decorations.push(Decoration.inline(group.from + start, group.from + end, { class: 'md-symbol' }));
+              }
+              if (preview) {
+                decorations.push(Decoration.widget(group.to, () => previewOf(state, preview), { side: 1, key: `preview:${JSON.stringify(preview)}` }));
               }
             }
           }
