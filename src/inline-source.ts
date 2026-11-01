@@ -275,8 +275,12 @@ export function createInlineSource(): InlineSource {
   // ---------------------------------------------------------------------
   // Writing Markdown out and reading it back
 
-  /** Write out the formatted text [from, to) as Markdown. Returns the cursor's new position. */
-  function expandRun(state: EditorState, tr: Transaction, from: number, to: number, cursor: number): number {
+  /**
+   * Write out the formatted text [from, to) as Markdown. Returns the cursor's
+   * new position: inside the symbols ("**|bold", "bold|**"), or after them
+   * if `outside` (the formatting was just finished by typing "**").
+   */
+  function expandRun(state: EditorState, tr: Transaction, from: number, to: number, cursor: number, outside: boolean): number {
     const plan = planRun(state, tr.doc, from, to);
     if (!plan) return cursor;
     const { content, markdown, shownAt, symbols } = plan;
@@ -295,15 +299,16 @@ export function createInlineSource(): InlineSource {
     }
     // The cursor goes inside the symbols: "**|bold" or "bold|**".
     const r = cursor - from;
-    const index = r <= 0 ? (shownAt[0] ?? markdown.length) : r > shownAt.length ? markdown.length : shownAt[r - 1] + 1;
+    const index =
+      r >= shownAt.length && outside ? markdown.length : r <= 0 ? (shownAt[0] ?? markdown.length) : r > shownAt.length ? markdown.length : shownAt[r - 1] + 1;
     return from + index;
   }
 
   /** Write out the Markdown at the cursor in the block at `blockPos`. Returns the cursor's new position. */
-  function expandAt(state: EditorState, tr: Transaction, blockPos: number, cursor: number): number {
+  function expandAt(state: EditorState, tr: Transaction, blockPos: number, cursor: number, outside = false): number {
     const start = blockPos + 1;
     const range = formattedRange(tr.doc.nodeAt(blockPos)!, cursor - start);
-    if (range) cursor = expandRun(state, tr, start + range[0], start + range[1], cursor);
+    if (range) cursor = expandRun(state, tr, start + range[0], start + range[1], cursor, outside);
     const block = tr.doc.nodeAt(blockPos)!;
     if (block.type.name === 'heading') {
       const text = '#'.repeat(block.attrs.level as number) + ' ';
@@ -443,7 +448,10 @@ export function createInlineSource(): InlineSource {
         if (wantsRun || strayRun || wantsPrefix) {
           const collapsed = groups.length ? collapseBlock(state, tr, at, head) : { cursor: head, edited: false };
           edited = collapsed.edited || edited;
-          cursor = expandAt(state, tr, at, collapsed.cursor ?? head);
+          // An input rule that just made "**bold**" clears the formatting for
+          // what's typed next: the cursor is after the "**", not inside.
+          const outside = state.storedMarks !== null && !state.storedMarks.some((mark) => FORMATTING.has(mark.type.name));
+          cursor = expandAt(state, tr, at, collapsed.cursor ?? head, outside);
         }
       }
       if (tr.doc.nodeAt(at)?.type.name === 'heading' && groupsIn(tr.doc.nodeAt(at)!, start).some((g) => g.prefix)) prefixHeading = at;

@@ -1,13 +1,15 @@
 // The find / replace bar (Ctrl+F, Ctrl+H). The searching itself is done by
 // the active editor's `Searcher` (see search.ts).
 
-import type { Searcher } from './search';
+import type { SearchOptions, Searcher } from './search';
 
 export interface FindBarElements {
   bar: HTMLElement;
   input: HTMLInputElement;
   count: HTMLElement;
   matchCase: HTMLButtonElement;
+  wholeWord: HTMLButtonElement;
+  regex: HTMLButtonElement;
   previous: HTMLButtonElement;
   next: HTMLButtonElement;
   close: HTMLButtonElement;
@@ -18,7 +20,7 @@ export interface FindBarElements {
 }
 
 export class FindBar {
-  private matchCase = false;
+  private options: SearchOptions = { matchCase: false, wholeWord: false, regex: false };
   private current = -1;
 
   constructor(
@@ -40,16 +42,28 @@ export class FindBar {
         this.replace();
       }
     });
+    // The options' buttons, and Alt+C / Alt+W / Alt+R while the bar has the focus.
+    const toggles: [keyof SearchOptions, HTMLButtonElement, string][] = [
+      ['matchCase', ui.matchCase, 'KeyC'],
+      ['wholeWord', ui.wholeWord, 'KeyW'],
+      ['regex', ui.regex, 'KeyR'],
+    ];
+    const toggle = (option: keyof SearchOptions, button: HTMLButtonElement) => {
+      this.options = { ...this.options, [option]: !this.options[option] };
+      button.setAttribute('aria-pressed', String(this.options[option]));
+      this.refresh();
+    };
+    for (const [option, button] of toggles) button.addEventListener('click', () => toggle(option, button));
     ui.bar.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         this.close();
       }
-    });
-    ui.matchCase.addEventListener('click', () => {
-      this.matchCase = !this.matchCase;
-      ui.matchCase.setAttribute('aria-pressed', String(this.matchCase));
-      this.refresh();
+      const shortcut = event.altKey && !event.ctrlKey && !event.metaKey && toggles.find(([, , code]) => code === event.code);
+      if (shortcut) {
+        event.preventDefault();
+        toggle(shortcut[0], shortcut[1]);
+      }
     });
     ui.previous.addEventListener('click', () => this.step(-1));
     ui.next.addEventListener('click', () => this.step(1));
@@ -98,10 +112,10 @@ export class FindBar {
   refresh(): void {
     const searcher = this.searcher();
     if (!searcher || !this.isOpen) return;
-    const count = searcher.search(this.ui.input.value, this.matchCase);
-    this.current = count ? searcher.firstAfterCursor() : -1;
+    const count = searcher.search(this.ui.input.value, this.options);
+    this.current = count > 0 ? searcher.firstAfterCursor() : -1;
     if (this.current >= 0) searcher.show(this.current);
-    this.showCount();
+    this.showCount(count < 0 ? 'Invalid pattern' : undefined, count < 0);
   }
 
   private replace(): void {
@@ -120,7 +134,7 @@ export class FindBar {
     this.showCount(replaced ? `Replaced ${replaced}` : undefined);
   }
 
-  private showCount(message?: string): void {
+  private showCount(message?: string, problem = false): void {
     const searcher = this.searcher();
     const count = searcher?.count ?? 0;
     const { count: label, input } = this.ui;
@@ -128,6 +142,6 @@ export class FindBar {
     else if (!input.value) label.textContent = '';
     else if (!count) label.textContent = 'No results';
     else label.textContent = `${this.current + 1} of ${count}`;
-    label.classList.toggle('none', Boolean(input.value) && !count && !message);
+    label.classList.toggle('none', problem || (Boolean(input.value) && !count && !message));
   }
 }

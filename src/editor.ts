@@ -41,11 +41,13 @@ import { codeBlockConfig } from '@milkdown/kit/component/code-block';
 import { frontmatter } from './frontmatter';
 import { autopairPlugin } from './autopair';
 import { emojiInputRule } from './emoji';
+import { emojiPicker } from './emoji-picker';
 import { highlight, highlightHandler, toggleHighlightCommand } from './highlight';
 import { textCommands } from './keymap';
 import { imageHandler, useImageBlocks } from './image-blocks';
 import { createInlineSource } from './inline-source';
 import { mermaidPreview } from './mermaid';
+import { tableInput } from './table-input';
 import { tocPlugin, tocText } from './toc';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
@@ -170,6 +172,8 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(inlineSource.plugins)
     .use(highlight)
     .use(emojiInputRule)
+    .use(emojiPicker)
+    .use(tableInput)
     .use(autopairPlugin)
     // Code blocks in "mermaid" show the diagram (math blocks already show
     // their formula this way).

@@ -410,6 +410,12 @@ body {
   color: var(--app-fg);
 }
 
+/* "ab" with a line under it: whole words. */
+.find-bar button.find-word {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .find-count {
   min-width: 72px;
   padding: 0 6px;
@@ -441,12 +447,20 @@ body {
   border: 0;
 }
 
-/* "MdPad x.y is available" */
-.update-bar {
+/* "MdPad x.y is available", "Restore unsaved changes" (notice.ts) */
+.notice-area {
   position: fixed;
   right: 16px;
   bottom: 36px;
   z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+
+.notice-bar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -457,7 +471,7 @@ body {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
-.update-bar button {
+.notice-bar button {
   height: 28px;
   padding: 0 12px;
   border: 1px solid var(--app-border);
@@ -468,7 +482,7 @@ body {
   cursor: pointer;
 }
 
-.update-bar button.primary {
+.notice-bar button.primary {
   border-color: var(--app-accent);
   background: var(--app-accent);
   color: #fff;
@@ -740,6 +754,40 @@ body {
 
 :root[data-theme='dark'] .milkdown .ProseMirror .md-mark {
   background: #6b5d1e;
+}
+
+/* Emoji picker (emoji-picker.ts) */
+.emoji-picker {
+  position: fixed;
+  z-index: 60;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+  user-select: none;
+}
+
+.emoji-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.emoji-row.selected {
+  background: var(--app-hover);
+}
+
+.emoji-glyph {
+  width: 20px;
+  font-size: 16px;
+  text-align: center;
 }
 
 /* [TOC] */

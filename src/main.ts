@@ -19,6 +19,8 @@ const app = new App({
     input: byId('find-input'),
     count: byId('find-count'),
     matchCase: byId('find-case'),
+    wholeWord: byId('find-word'),
+    regex: byId('find-regex'),
     previous: byId('find-previous'),
     next: byId('find-next'),
     close: byId('find-close'),

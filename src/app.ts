@@ -14,6 +14,7 @@ import * as platform from './platform';
 import { quickOpen } from './quick-open';
 import { addRecentFile, clearRecentFiles, recentFiles, removeRecentFile } from './recent';
 import { dueForCheck, offerUpdate, rememberCheck } from './updates';
+import { dropDraft, forgetDraft, keepDraft, leftoverDrafts, offerRestore, type Draft } from './drafts';
 import { Sidebar, type SidebarElements, type SidebarTab } from './sidebar';
 import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
 import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
@@ -39,6 +40,8 @@ interface ViewSettings {
 }
 /** Auto save waits this long after the last change. */
 const AUTO_SAVE_DELAY = 1500;
+/** Unsaved changes are kept as a draft this long after the last change (drafts.ts). */
+const DRAFT_DELAY = 2000;
 
 interface DocumentState {
   /** Absolute path, or null for a document that was never saved. */
@@ -90,6 +93,7 @@ export class App {
   private closing = false;
   private autoSave = loadFlag(AUTO_SAVE_KEY);
   private autoSaveTimer: number | undefined;
+  private draftTimer: number | undefined;
   private readonly findBar: FindBar;
   private readonly sidebar: Sidebar;
   private readonly outline: Outline;
@@ -206,15 +210,51 @@ export class App {
       setTimeout(() => void this.run(() => this.checkForUpdates(false)), 8000);
     }
     const initialPath = await platform.initialFilePath();
+    let opened = false;
     if (initialPath) {
       try {
         await this.load(await platform.readFile(initialPath));
-        return;
+        opened = true;
       } catch (error) {
         await platform.showError(`Could not open ${initialPath}\n\n${error}`);
       }
     }
-    await this.load(blankDocument());
+    if (!opened) await this.load(blankDocument());
+    void this.offerLeftoverDraft();
+  }
+
+  /**
+   * After a crash: offer to restore the unsaved changes a window left behind
+   * (drafts.ts). One per start: the draft of the file this window opened,
+   * else the newest. Others are offered the next time.
+   */
+  private async offerLeftoverDraft(): Promise<void> {
+    const drafts = await leftoverDrafts();
+    const left = drafts.find(({ draft }) => draft.path !== null && draft.path === this.doc.path) ?? drafts[0];
+    if (!left) return;
+    if (!(await offerRestore(left.draft))) {
+      forgetDraft(left.key);
+      return;
+    }
+    await this.run(async () => {
+      if (!(await this.confirmDiscardChanges())) return;
+      await this.restoreDraft(left.draft);
+      forgetDraft(left.key);
+    });
+  }
+
+  /** Open the draft's file with the draft's text as unsaved changes. */
+  private async restoreDraft(draft: Draft): Promise<void> {
+    let file: platform.OpenedFile;
+    try {
+      file = draft.path ? await platform.readFile(draft.path) : blankDocument();
+    } catch {
+      // The file is gone: the draft becomes a new, unsaved document.
+      file = { ...blankDocument(), name: draft.name };
+    }
+    await this.load(file);
+    this.doc.dirty = true;
+    await this.mountEditor(toLf(draft.text));
   }
 
   /** Run a command by name (or a function), one at a time. */
@@ -293,6 +333,7 @@ export class App {
       this.fileTree.setCurrent(written.path);
     }
     this.updateUi();
+    this.scheduleDraft();
     return true;
   }
 
@@ -300,6 +341,18 @@ export class App {
     this.autoSave = !this.autoSave;
     saveFlag(AUTO_SAVE_KEY, this.autoSave);
     this.scheduleAutoSave();
+  }
+
+  /** Keeps a draft of unsaved changes a little after the last change; none when there are none. */
+  private scheduleDraft(): void {
+    window.clearTimeout(this.draftTimer);
+    if (!this.doc.dirty) {
+      dropDraft();
+      return;
+    }
+    this.draftTimer = window.setTimeout(() => {
+      if (this.doc.dirty && this.editor) keepDraft({ path: this.doc.path, name: this.doc.name, text: this.editor.getMarkdown() });
+    }, DRAFT_DELAY);
   }
 
   /** Saves a little after the last change, if Auto Save is on. */
@@ -475,6 +528,7 @@ export class App {
     if (!(await offerUpdate(update.version))) return;
     await this.run(async () => {
       if (!(await this.confirmDiscardChanges())) return;
+      dropDraft();
       await platform.installUpdate();
     });
   }
@@ -663,6 +717,7 @@ export class App {
     }
     this.updateWordCount(markdown);
     this.scheduleAutoSave();
+    this.scheduleDraft();
     this.updateOutline();
   }
 
@@ -749,6 +804,8 @@ export class App {
 
     platform.onCloseRequested(async () => {
       this.closing = await this.confirmDiscardChanges();
+      // Saved, or the changes were thrown away on purpose: no draft to keep.
+      if (this.closing) dropDraft();
       return this.closing;
     });
     // Last line of defence against anything else that would leave the page

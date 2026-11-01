@@ -7,9 +7,17 @@ import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state';
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view';
 import { $prose } from '@milkdown/kit/utils';
 
+export interface SearchOptions {
+  matchCase: boolean;
+  /** Only matches that are whole words. */
+  wholeWord: boolean;
+  /** `query` is a regular expression; replacements can use $1, $&, $<name>. */
+  regex: boolean;
+}
+
 export interface Searcher {
-  /** Find every match of `query`; returns how many there are. */
-  search(query: string, matchCase: boolean): number;
+  /** Find every match of `query`. Returns how many there are, or -1 if it isn't a valid regular expression. */
+  search(query: string, options: SearchOptions): number;
   /** Make match `index` the current one: select it and scroll to it. */
   show(index: number): void;
   /** The first match at or after the cursor, or -1. */
@@ -27,16 +35,49 @@ export interface Searcher {
 interface Match {
   from: number;
   to: number;
+  /** The regular expression match, for $1… in a replacement. */
+  groups: RegExpMatchArray;
 }
 
-function matchesIn(text: string, query: string, matchCase: boolean, offset = 0): Match[] {
+const NO_OPTIONS: SearchOptions = { matchCase: false, wholeWord: false, regex: false };
+
+/** The pattern for a search, or null if `query` isn't a valid regular expression. */
+function patternFor(query: string, { matchCase, wholeWord, regex }: SearchOptions): RegExp | null {
+  const source = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const flags = matchCase ? 'g' : 'gi';
+  try {
+    // Unicode mode knows the letters of every language (for whole words);
+    // some patterns are only valid without it.
+    return new RegExp(wholeWord ? `(?<![\\p{L}\\p{N}_])(?:${source})(?![\\p{L}\\p{N}_])` : source, flags + 'u');
+  } catch {
+    try {
+      return new RegExp(wholeWord ? `\\b(?:${source})\\b` : source, flags);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function matchesIn(text: string, pattern: RegExp, offset = 0): Match[] {
   const matches: Match[] = [];
-  if (!query) return matches;
-  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'g' : 'gi');
   for (const m of text.matchAll(pattern)) {
-    matches.push({ from: offset + m.index, to: offset + m.index + m[0].length });
+    // Empty matches (of "^" or "a*") can't be shown or replaced.
+    if (m[0].length) matches.push({ from: offset + m.index, to: offset + m.index + m[0].length, groups: m });
   }
   return matches;
+}
+
+/** `text` with $1, $&, $<name> and $$ filled in from a regular expression match. */
+function expand(text: string, match: Match, options: SearchOptions): string {
+  if (!options.regex) return text;
+  const m = match.groups;
+  return text.replace(/\$(\$|&|\d{1,2}|<[^>]*>)/g, (all, token: string) => {
+    if (token === '$') return '$';
+    if (token === '&') return m[0];
+    if (token.startsWith('<')) return m.groups?.[token.slice(1, -1)] ?? '';
+    const n = Number(token);
+    return n > 0 && n < m.length ? (m[n] ?? '') : all;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -58,14 +99,14 @@ export const searchHighlightPlugin = $prose(
 );
 
 /** Matches inside text blocks. A match can't cross an image or a line break. */
-function findInDoc(doc: ProseNode, query: string, matchCase: boolean): Match[] {
+function findInDoc(doc: ProseNode, pattern: RegExp): Match[] {
   const matches: Match[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
     let text = '';
     let start = -1;
     const flush = () => {
-      matches.push(...matchesIn(text, query, matchCase, start));
+      matches.push(...matchesIn(text, pattern, start));
       text = '';
       start = -1;
     };
@@ -86,7 +127,7 @@ function findInDoc(doc: ProseNode, query: string, matchCase: boolean): Match[] {
 export class ProseSearcher implements Searcher {
   private matches: Match[] = [];
   private query = '';
-  private matchCase = false;
+  private options = NO_OPTIONS;
   private searchedDoc: ProseNode | null = null;
   private current = -1;
 
@@ -96,14 +137,15 @@ export class ProseSearcher implements Searcher {
     return this.matches.length;
   }
 
-  search(query: string, matchCase: boolean): number {
+  search(query: string, options: SearchOptions): number {
     this.query = query;
-    this.matchCase = matchCase;
+    this.options = options;
     this.searchedDoc = this.view.state.doc;
-    this.matches = findInDoc(this.view.state.doc, query, matchCase);
+    const pattern = query ? patternFor(query, options) : null;
+    this.matches = pattern ? findInDoc(this.view.state.doc, pattern) : [];
     this.current = -1;
     this.paint();
-    return this.matches.length;
+    return query && !pattern ? -1 : this.matches.length;
   }
 
   show(index: number): void {
@@ -127,9 +169,10 @@ export class ProseSearcher implements Searcher {
     this.refreshIfEdited();
     const match = this.matches[index];
     if (!match) return -1;
-    this.view.dispatch(this.view.state.tr.insertText(text, match.from, match.to));
-    this.search(this.query, this.matchCase);
-    const next = this.matches.findIndex((m) => m.from >= match.from + text.length);
+    const replacement = expand(text, match, this.options);
+    this.view.dispatch(this.view.state.tr.insertText(replacement, match.from, match.to));
+    this.search(this.query, this.options);
+    const next = this.matches.findIndex((m) => m.from >= match.from + replacement.length);
     return next < 0 ? (this.matches.length ? 0 : -1) : next;
   }
 
@@ -138,9 +181,9 @@ export class ProseSearcher implements Searcher {
     const count = this.matches.length;
     if (!count) return 0;
     const tr = this.view.state.tr;
-    for (const match of [...this.matches].reverse()) tr.insertText(text, match.from, match.to);
+    for (const match of [...this.matches].reverse()) tr.insertText(expand(text, match, this.options), match.from, match.to);
     this.view.dispatch(tr);
-    this.search(this.query, this.matchCase);
+    this.search(this.query, this.options);
     return count;
   }
 
@@ -154,7 +197,7 @@ export class ProseSearcher implements Searcher {
   private refreshIfEdited(): void {
     if (this.searchedDoc && this.searchedDoc !== this.view.state.doc) {
       const current = this.current;
-      this.search(this.query, this.matchCase);
+      this.search(this.query, this.options);
       this.current = Math.min(current, this.matches.length - 1);
     }
   }
@@ -177,7 +220,7 @@ export class ProseSearcher implements Searcher {
 export class TextareaSearcher implements Searcher {
   private matches: Match[] = [];
   private query = '';
-  private matchCase = false;
+  private options = NO_OPTIONS;
 
   constructor(private readonly textarea: HTMLTextAreaElement) {}
 
@@ -185,15 +228,16 @@ export class TextareaSearcher implements Searcher {
     return this.matches.length;
   }
 
-  search(query: string, matchCase: boolean): number {
+  search(query: string, options: SearchOptions): number {
     this.query = query;
-    this.matchCase = matchCase;
-    this.matches = matchesIn(this.textarea.value, query, matchCase);
-    return this.matches.length;
+    this.options = options;
+    const pattern = query ? patternFor(query, options) : null;
+    this.matches = pattern ? matchesIn(this.textarea.value, pattern) : [];
+    return query && !pattern ? -1 : this.matches.length;
   }
 
   show(index: number): void {
-    this.search(this.query, this.matchCase);
+    this.search(this.query, this.options);
     const match = this.matches[index];
     if (!match) return;
     // Focusing makes the textarea scroll to the selection; then give the
@@ -211,22 +255,23 @@ export class TextareaSearcher implements Searcher {
   }
 
   replace(index: number, text: string): number {
-    this.search(this.query, this.matchCase);
+    this.search(this.query, this.options);
     const match = this.matches[index];
     if (!match) return -1;
-    this.insert(match.from, match.to, text);
-    this.search(this.query, this.matchCase);
-    const next = this.matches.findIndex((m) => m.from >= match.from + text.length);
+    const replacement = expand(text, match, this.options);
+    this.insert(match.from, match.to, replacement);
+    this.search(this.query, this.options);
+    const next = this.matches.findIndex((m) => m.from >= match.from + replacement.length);
     return next < 0 ? (this.matches.length ? 0 : -1) : next;
   }
 
   replaceAll(text: string): number {
-    const count = this.search(this.query, this.matchCase);
-    if (!count) return 0;
+    const count = this.search(this.query, this.options);
+    if (count <= 0) return 0;
     let value = this.textarea.value;
-    for (const match of [...this.matches].reverse()) value = value.slice(0, match.from) + text + value.slice(match.to);
+    for (const match of [...this.matches].reverse()) value = value.slice(0, match.from) + expand(text, match, this.options) + value.slice(match.to);
     this.insert(0, this.textarea.value.length, value);
-    this.search(this.query, this.matchCase);
+    this.search(this.query, this.options);
     return count;
   }
 
