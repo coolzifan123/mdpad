@@ -23,11 +23,16 @@ export const tableInput = $prose(
           const $block = state.doc.resolve($head.before());
           if (!table || !$block.parent.canReplaceWith($block.index(), $block.index() + 1, table)) return false;
 
+          // Each cell's text between the pipes, as Markdown (the whole line
+          // would come out as "\| Name | …": a line can't start with a pipe).
+          const text = block.textBetween(0, block.content.size, undefined, '￼');
+          const pipes = [...text.matchAll(/(?<!\\)\|/g)].map((m) => m.index);
+          const cells = pipes.slice(1).map((end, i) => {
+            const paragraph = state.schema.nodes.paragraph.create(null, block.content.cut(pipes[i] + 1, end));
+            return ctx.get(serializerCtx)(state.schema.topNodeType.create(null, paragraph)).trim();
+          });
           // Read it as Markdown with a separator line and an empty row under it.
-          const doc = state.schema.topNodeType.create(null, block);
-          const header = ctx.get(serializerCtx)(doc).trim();
-          const cells = header.replace(/^\s*\||\|\s*$/g, '').split(/(?<!\\)\|/).length;
-          const markdown = `${header}\n${'| --- '.repeat(cells)}|\n${'|  '.repeat(cells)}|\n`;
+          const markdown = `| ${cells.join(' | ')} |\n${'| --- '.repeat(cells.length)}|\n${'|  '.repeat(cells.length)}|\n`;
           const parsed = ctx.get(parserCtx)(markdown);
           const node = parsed.firstChild;
           if (parsed.childCount !== 1 || node?.type !== table) return false;
