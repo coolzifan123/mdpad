@@ -5,6 +5,8 @@
 // Optionally the same for the Markdown symbols *, _ and ` (like Typora's
 // "auto pair Markdown syntax"): "*" gives "*|*", a second "*" gives "**|**",
 // and typing the closing symbol finishes the formatting.
+//
+// Also optionally smart quotes: " and ' become “ ” and ‘ ’ (it’s).
 
 import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
 import type { EditorView } from '@milkdown/kit/prose/view';
@@ -14,7 +16,8 @@ const PAIRS: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"' }
 const CLOSERS = new Set(Object.values(PAIRS));
 const MARKDOWN = new Set(['*', '_', '`']);
 
-export const autopairSettings = { enabled: true, markdown: false };
+export const autopairSettings = { enabled: true, markdown: false, smartQuotes: false };
+const CURLY: Record<string, [string, string]> = { '"': ['“', '”'], "'": ['‘', '’'] };
 
 export const autopairPlugin = $prose(
   () =>
@@ -31,6 +34,7 @@ export const autopairPlugin = $prose(
           const before = state.doc.textBetween(Math.max($from.start(), from - 2), from);
 
           if (autopairSettings.markdown && MARKDOWN.has(text)) return markdownPair(view, from, to, text, before, next);
+          if (autopairSettings.smartQuotes && CURLY[text]) return smartQuote(view, from, to, text, before, next);
           if (!autopairSettings.enabled) return false;
 
           // Step over a closer that's already there.
@@ -58,7 +62,9 @@ export const autopairPlugin = $prose(
           const $from = state.doc.resolve(from);
           if ($from.parent.type.spec.code) return false;
           const around = state.doc.textBetween(Math.max($from.start(), from - 1), Math.min($from.end(), from + 1));
-          const pair = (autopairSettings.enabled && PAIRS[around[0]] === around[1]) || (autopairSettings.markdown && MARKDOWN.has(around[0]) && around[0] === around[1]);
+          const pair =
+            (autopairSettings.enabled && (PAIRS[around[0]] === around[1] || around === '“”')) ||
+            (autopairSettings.markdown && MARKDOWN.has(around[0]) && around[0] === around[1]);
           if (around.length !== 2 || !pair) return false;
           view.dispatch(state.tr.delete(from - 1, from + 1));
           return true;
@@ -66,6 +72,28 @@ export const autopairPlugin = $prose(
       },
     }),
 );
+
+/** A curly quote for " or ' typed at [from, to): opening after a space or bracket, else closing (it’s). */
+function smartQuote(view: EditorView, from: number, to: number, text: string, before: string, next: string): boolean {
+  const { state } = view;
+  const [open, close] = CURLY[text];
+  // Step over a closing quote that's already there.
+  if (from === to && next === close) {
+    view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, from + 1)));
+    return true;
+  }
+  const opening = !before || /[\s([{\-–—“‘]$/u.test(before);
+  const selected = state.doc.textBetween(from, to);
+  if (!opening && !selected) {
+    view.dispatch(state.tr.insertText(close, from, to));
+    return true;
+  }
+  // Double quotes in pairs (with "Type brackets and quotes in pairs"), or around the selection.
+  const pair = !!selected || (text === '"' && autopairSettings.enabled && (!next || /[\s)\]}.,;:!?]/.test(next)));
+  const tr = state.tr.insertText(open + selected + (pair ? close : ''), from, to);
+  view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + 1, from + 1 + selected.length)));
+  return true;
+}
 
 /** "*", "_" or "`" typed at [from, to). `before` is up to two characters before it, `next` the one after. */
 function markdownPair(view: EditorView, from: number, to: number, text: string, before: string, next: string): boolean {

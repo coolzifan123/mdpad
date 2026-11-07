@@ -844,6 +844,17 @@ body {
   opacity: 0.75;
 }
 
+/* Code blocks: line numbers only when turned on in Preferences. */
+body:not(.code-line-numbers) .milkdown .cm-gutters {
+  display: none;
+}
+
+.milkdown .cm-gutters {
+  border-right: 1px solid var(--app-border);
+  background: transparent;
+  color: var(--app-fg-muted);
+}
+
 /* A picture or formula shown next to its Markdown while it's edited. */
 .milkdown .ProseMirror .md-preview {
   user-select: none;

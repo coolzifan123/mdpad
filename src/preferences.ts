@@ -12,6 +12,9 @@ export interface Preferences {
   autoPair: boolean;
   /** Type *, _ and ` in pairs too. */
   autoPairMarkdown: boolean;
+  /** Curly quotes: "x" becomes “x”, it's becomes it’s. */
+  smartQuotes: boolean;
+  codeLineNumbers: boolean;
   /** Folder next to a document where pasted images go. */
   imageFolder: string;
   /** Line endings of new files. */
@@ -27,6 +30,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   spellcheck: true,
   autoPair: true,
   autoPairMarkdown: false,
+  smartQuotes: false,
+  codeLineNumbers: false,
   imageFolder: 'assets',
   newFileLineEnding: 'system',
   checkUpdates: true,
@@ -54,6 +59,7 @@ export function applyLayout(prefs: Preferences): void {
   root.setProperty('--crepe-base-font-size', `${prefs.fontSize}px`);
   root.setProperty('--editor-font-size', `${prefs.fontSize}px`);
   root.setProperty('--editor-max-width', `${prefs.editorWidth}px`);
+  document.body.classList.toggle('code-line-numbers', prefs.codeLineNumbers);
 }
 
 // ---------------------------------------------------------------------------

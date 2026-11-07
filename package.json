@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@codemirror/view": "^6.43.15",
     "@milkdown/crepe": "^7.22.3",
     "@milkdown/kit": "^7.22.3",
     "@tauri-apps/api": "^2.12.4",

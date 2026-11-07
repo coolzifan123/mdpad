@@ -104,6 +104,9 @@ export class FindBar {
     this.current = count > 0 ? Math.min(index, count - 1) : -1;
     if (this.current >= 0) searcher.show(this.current);
     this.showCount();
+    // Like Ctrl+F: Enter goes on to the next match. (With the focus in the
+    // editor, the selected match would also bring up the formatting toolbar.)
+    this.ui.input.focus();
   }
 
   close(): void {

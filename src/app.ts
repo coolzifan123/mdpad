@@ -476,6 +476,8 @@ export class App {
           { kind: 'checkbox', label: 'Check spelling', value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
           { kind: 'checkbox', label: 'Type brackets and quotes in pairs', value: this.prefs.autoPair, onChange: (autoPair) => set({ autoPair }) },
           { kind: 'checkbox', label: 'Type *, _ and ` in pairs', value: this.prefs.autoPairMarkdown, onChange: (autoPairMarkdown) => set({ autoPairMarkdown }) },
+          { kind: 'checkbox', label: 'Smart quotes (“curly” and it’s)', value: this.prefs.smartQuotes, onChange: (smartQuotes) => set({ smartQuotes }) },
+          { kind: 'checkbox', label: 'Line numbers in code blocks', value: this.prefs.codeLineNumbers, onChange: (codeLineNumbers) => set({ codeLineNumbers }) },
           { kind: 'checkbox', label: 'Show Markdown symbols at the cursor', value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
           { kind: 'checkbox', label: 'Focus mode', value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
           { kind: 'checkbox', label: 'Typewriter mode', value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
@@ -558,6 +560,7 @@ export class App {
     this.ui.host.querySelector('.ProseMirror, .source-editor')?.setAttribute('spellcheck', String(this.prefs.spellcheck));
     autopairSettings.enabled = this.prefs.autoPair;
     autopairSettings.markdown = this.prefs.autoPairMarkdown;
+    autopairSettings.smartQuotes = this.prefs.smartQuotes;
   }
 
   /** Change and remember view settings, and show them. */

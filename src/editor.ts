@@ -48,6 +48,8 @@ import { imageHandler, useImageBlocks } from './image-blocks';
 import { createInlineSource } from './inline-source';
 import { mermaidPreview } from './mermaid';
 import { tableInput } from './table-input';
+import { pasteLink } from './paste-link';
+import { lineNumbers } from '@codemirror/view';
 import { tocPlugin, tocText } from './toc';
 import { detectStyle } from './markdown-style';
 import { BlockPreserver, type Range, type SourceTree } from './preserve';
@@ -120,8 +122,9 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     },
     featureConfigs: {
       [Crepe.Feature.Placeholder]: { text: 'Start writing…', mode: 'doc' },
-      // Math blocks show only the formula until you click them.
-      [Crepe.Feature.CodeMirror]: { previewOnlyByDefault: true },
+      // Math blocks show only the formula until you click them. Line
+      // numbers are hidden unless turned on in Preferences (app.css).
+      [Crepe.Feature.CodeMirror]: { previewOnlyByDefault: true, extensions: [lineNumbers()] },
       [Crepe.Feature.ImageBlock]: {
         proxyDomURL: options.resolveImage,
         onUpload: options.uploadImage,
@@ -174,6 +177,7 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
     .use(emojiInputRule)
     .use(emojiPicker)
     .use(tableInput)
+    .use(pasteLink)
     .use(autopairPlugin)
     // Code blocks in "mermaid" show the diagram (math blocks already show
     // their formula this way).
