@@ -20,7 +20,7 @@ import { FolderSearch } from './folder-search';
 import { applyCustomTheme, EXAMPLE_THEME, savedCustomTheme, setThemeChoice, themeChoice, toggleTheme, type ThemeChoice } from './theme';
 import { applyLayout, loadPreferences, savePreferences, showPreferences, type Preferences } from './preferences';
 import { writingModes } from './writing-modes';
-import { textStats } from './wordcount';
+import { textStats, type TextStats } from './wordcount';
 import { autopairSettings } from './autopair';
 import { inlineSourceSettings } from './inline-source';
 
@@ -43,6 +43,9 @@ interface ViewSettings {
 const AUTO_SAVE_DELAY = 1500;
 /** Unsaved changes are kept as a draft this long after the last change (drafts.ts). */
 const DRAFT_DELAY = 2000;
+/** In files this big, the words are counted once typing pauses, not after every key. */
+const BIG_FOR_COUNTING = 100_000;
+const COUNT_DELAY = 400;
 
 interface DocumentState {
   /** Absolute path, or null for a document that was never saved. */
@@ -95,6 +98,9 @@ export class App {
   private autoSave = loadFlag(AUTO_SAVE_KEY);
   private autoSaveTimer: number | undefined;
   private draftTimer: number | undefined;
+  private countTimer: number | undefined;
+  /** The whole document's count, kept until the document changes. */
+  private totalCount: { markdown: string; stats: TextStats } | null = null;
   private readonly findBar: FindBar;
   private readonly folderSearch: FolderSearch;
   private readonly sidebar: Sidebar;
@@ -696,6 +702,8 @@ export class App {
   private async mountEditor(markdown: string): Promise<void> {
     const previous = this.editor;
     this.editor = null;
+    window.clearTimeout(this.countTimer);
+    this.totalCount = null;
     await previous?.destroy();
 
     const editor = await createEditor(this.mode, {
@@ -734,7 +742,7 @@ export class App {
       this.doc.dirty = dirty;
       this.updateUi();
     }
-    this.updateWordCount(markdown);
+    this.scheduleWordCount(markdown);
     this.scheduleAutoSave();
     this.scheduleDraft();
     this.updateOutline();
@@ -849,8 +857,27 @@ export class App {
   }
 
   /** "340 words · 1,912 characters", or "12 of 340 words" with a selection. */
-  private updateWordCount(markdown = this.editor?.getMarkdown() ?? ''): void {
-    const total = textStats(markdown);
+  /** Count again after a change: at once, or in a big file once typing pauses. */
+  private scheduleWordCount(markdown: string): void {
+    window.clearTimeout(this.countTimer);
+    if (markdown.length < BIG_FOR_COUNTING || !this.totalCount) {
+      this.updateWordCount(markdown);
+      return;
+    }
+    this.countTimer = window.setTimeout(() => this.updateWordCount(this.editor?.getMarkdown() ?? ''), COUNT_DELAY);
+  }
+
+  /**
+   * The status bar's count. With `markdown`, the document changed and is
+   * counted again; without it (the selection moved), the last count is kept.
+   */
+  private updateWordCount(markdown?: string): void {
+    if (markdown !== undefined && markdown !== this.totalCount?.markdown) this.totalCount = { markdown, stats: textStats(markdown) };
+    if (!this.totalCount) {
+      const current = this.editor?.getMarkdown() ?? '';
+      this.totalCount = { markdown: current, stats: textStats(current) };
+    }
+    const total = this.totalCount.stats;
     const selected = this.editor?.selectionMarkdown() ?? '';
     const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
     this.ui.statusCount.textContent = selected
