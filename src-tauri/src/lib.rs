@@ -404,8 +404,9 @@ pub fn run() {
             // and made here so tests can turn on the debugging port.
             let config = app.config().app.windows[0].clone();
             let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
-            if let Some(port) = debug_port() {
-                window = window.additional_browser_args(&format!("{WEBVIEW_DEFAULT_ARGS} --remote-debugging-port={port}"));
+            let test_args = test_browser_args();
+            if !test_args.is_empty() {
+                window = window.additional_browser_args(&format!("{WEBVIEW_DEFAULT_ARGS} {test_args}"));
             }
             let window = window.build()?;
             #[cfg(windows)]
@@ -425,6 +426,21 @@ const WEBVIEW_DEFAULT_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSma
 /// It only listens on this computer (127.0.0.1).
 fn debug_port() -> Option<u16> {
     std::env::var("MDPAD_DEBUG_PORT").ok()?.parse().ok()
+}
+
+/// Browser flags for automated tests: the debug port above, and any flags in
+/// MDPAD_BROWSER_ARGS (for measuring, e.g. --disable-renderer-accessibility).
+fn test_browser_args() -> String {
+    let mut args = Vec::new();
+    if let Some(port) = debug_port() {
+        args.push(format!("--remote-debugging-port={port}"));
+    }
+    if let Ok(extra) = std::env::var("MDPAD_BROWSER_ARGS") {
+        if !extra.trim().is_empty() {
+            args.push(extra.trim().to_string());
+        }
+    }
+    args.join(" ")
 }
 
 #[cfg(test)]
