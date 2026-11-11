@@ -229,7 +229,8 @@ export class App {
     await this.loadThemes();
     // Look for a new version a little after starting, at most once a day.
     if (this.prefs.checkUpdates && dueForCheck()) {
-      setTimeout(() => void this.run(() => this.checkForUpdates(false)), 8000);
+      // Not as a command: shortcuts (Ctrl+S…) must keep working while it asks GitHub.
+      setTimeout(() => void this.checkForUpdates(false), 8000);
     }
     const initialPath = await platform.initialFilePath();
     let opened = false;
@@ -560,9 +561,12 @@ export class App {
       if (manual) await platform.showMessage(t('You have the latest version of MdPad ({version}).', { version: __APP_VERSION__ }), t('No Updates'));
       return;
     }
-    // Let other commands run while the offer is showing.
-    this.busy = false;
-    if (!(await offerUpdate(update.version))) return;
+    // Not awaited: other commands run while the offer is showing.
+    void this.offerUpdate(update.version);
+  }
+
+  private async offerUpdate(version: string): Promise<void> {
+    if (!(await offerUpdate(version))) return;
     await this.run(async () => {
       if (!(await this.confirmDiscardChanges())) return;
       dropDraft();
