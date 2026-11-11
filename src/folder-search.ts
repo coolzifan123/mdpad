@@ -3,6 +3,7 @@
 // lines that match. Clicking a line opens the file at that match.
 
 import * as platform from './platform';
+import { count, t } from './i18n';
 import { patternFor, type SearchOptions } from './search';
 
 /** Lines listed at most, so a common word doesn't flood the panel. */
@@ -43,15 +44,15 @@ export class FolderSearch {
     bar.className = 'folder-search-bar';
     this.input = Object.assign(document.createElement('input'), {
       type: 'text',
-      placeholder: 'Search in folder',
+      placeholder: t('Search in folder'),
       spellcheck: false,
     });
-    this.input.setAttribute('aria-label', 'Search in folder');
+    this.input.setAttribute('aria-label', t('Search in folder'));
     bar.append(this.input);
     const toggles: [keyof SearchOptions, string, string][] = [
-      ['matchCase', 'Aa', 'Match case'],
-      ['wholeWord', 'ab', 'Whole word'],
-      ['regex', '.*', 'Regular expression'],
+      ['matchCase', 'Aa', t('Match case')],
+      ['wholeWord', 'ab', t('Whole word')],
+      ['regex', '.*', t('Regular expression')],
     ];
     for (const [option, label, title] of toggles) {
       const button = Object.assign(document.createElement('button'), { textContent: label, title });
@@ -97,10 +98,10 @@ export class FolderSearch {
     this.results.replaceChildren();
     const folder = this.hooks.folder();
     if (!query) return this.say('');
-    if (!folder) return this.say('Open a folder (File → Open Folder…) to search its files.');
+    if (!folder) return this.say(t('Open a folder (File → Open Folder…) to search its files.'));
     const pattern = patternFor(query, this.options);
-    if (!pattern) return this.say('Invalid pattern', true);
-    this.say('Searching…');
+    if (!pattern) return this.say(t('Invalid pattern'), true);
+    this.say(t('Searching…'));
 
     const files = await platform.findMarkdownFiles(folder);
     let matches = 0;
@@ -119,11 +120,14 @@ export class FolderSearch {
         lines += shown.length;
         this.results.append(this.fileResults(files[i + j], folder, found, shown, query, options));
       }
-      this.say(`Searching… ${matches} ${matches === 1 ? 'match' : 'matches'} so far`);
+      this.say(t('Searching… {matches} so far', { matches: count(matches, '1 match', '{n} matches') }));
     }
     if (generation !== this.generation) return;
-    const files_ = `${matchedFiles} ${matchedFiles === 1 ? 'file' : 'files'}`;
-    this.say(matches ? `${matches} ${matches === 1 ? 'match' : 'matches'} in ${files_}` : `No results in ${files.length} ${files.length === 1 ? 'file' : 'files'}`);
+    this.say(
+      matches
+        ? t('{matches} in {files}', { matches: count(matches, '1 match', '{n} matches'), files: count(matchedFiles, '1 file', '{n} files') })
+        : t('No results in {files}', { files: count(files.length, '1 file', '{n} files') }),
+    );
   }
 
   private async matchesIn(path: string, pattern: RegExp): Promise<LineMatch[]> {
@@ -161,13 +165,13 @@ export class FolderSearch {
     for (const match of shown) {
       const row = document.createElement('div');
       row.className = 'folder-search-line';
-      row.title = `Line ${match.line}`;
+      row.title = t('Line {n}', { n: match.line });
       row.append(snippet(match));
       row.addEventListener('click', () => this.hooks.open(path, query, options, match.index));
       box.append(row);
     }
     if (shown.length < found.length) {
-      box.append(Object.assign(document.createElement('div'), { className: 'folder-search-more', textContent: `${found.length - shown.length} more lines` }));
+      box.append(Object.assign(document.createElement('div'), { className: 'folder-search-more', textContent: count(found.length - shown.length, '1 more line', '{n} more lines') }));
     }
     return box;
   }

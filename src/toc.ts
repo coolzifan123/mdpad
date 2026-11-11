@@ -5,6 +5,7 @@ import type { Node as ProseNode } from '@milkdown/kit/prose/model';
 import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
 import { Decoration, DecorationSet, type EditorView } from '@milkdown/kit/prose/view';
 import { $prose } from '@milkdown/kit/utils';
+import { t } from './i18n';
 
 /** A heading's text as shown (the editor leaves out a written-out "## "). */
 export const tocText = { of: (heading: ProseNode) => heading.textContent };
@@ -55,7 +56,7 @@ function renderToc(view: EditorView, headings: TocHeading[]): HTMLElement {
   box.className = 'toc';
   box.contentEditable = 'false';
   if (!headings.length) {
-    box.textContent = 'No headings yet';
+    box.textContent = t('No headings yet');
     return box;
   }
   const top = Math.min(...headings.map((h) => h.level));

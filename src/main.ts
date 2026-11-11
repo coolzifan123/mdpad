@@ -2,7 +2,12 @@ import { App } from './app';
 import './styles/app.css';
 import './styles/theme.css';
 import { applySavedTheme } from './theme';
+import { setLanguage, translatePage } from './i18n';
+import { loadPreferences } from './preferences';
 
+// The language first: everything after shows its text in it.
+setLanguage(loadPreferences().language);
+translatePage(document.body);
 applySavedTheme();
 
 const byId = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;

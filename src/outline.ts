@@ -2,6 +2,7 @@
 // jumps to it; the heading you are reading is highlighted.
 
 import type { Heading } from './editor';
+import { t } from './i18n';
 
 export class Outline {
   private shown = '';
@@ -19,7 +20,7 @@ export class Outline {
     this.shown = key;
     this.panel.replaceChildren();
     if (!headings.length) {
-      this.panel.append(Object.assign(document.createElement('p'), { className: 'sidebar-empty', textContent: 'No headings' }));
+      this.panel.append(Object.assign(document.createElement('p'), { className: 'sidebar-empty', textContent: t('No headings') }));
       return;
     }
     const top = Math.min(...headings.map((h) => h.level));

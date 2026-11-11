@@ -7,6 +7,7 @@
 // was left behind.
 
 import { offerChoice } from './notice';
+import { t } from './i18n';
 
 const PREFIX = 'mdpad-draft:';
 /** Without Web Locks: an open window rewrites its draft at least this often. */
@@ -80,6 +81,6 @@ export function forgetDraft(key: string): void {
 /** A bar asking whether to restore a left-over draft. Resolves true for "Restore". */
 export function offerRestore(draft: Draft): Promise<boolean> {
   const minutes = Math.round((Date.now() - draft.time) / 60_000);
-  const when = minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : new Date(draft.time).toLocaleString();
-  return offerChoice(`"${draft.name}" had unsaved changes when MdPad closed (${when}).`, 'Restore', 'Discard', 'draft-bar');
+  const when = minutes < 1 ? t('just now') : minutes < 60 ? t('{n} min ago', { n: minutes }) : new Date(draft.time).toLocaleString();
+  return offerChoice(t('"{name}" had unsaved changes when MdPad closed ({when}).', { name: draft.name, when }), t('Restore'), t('Discard'), 'draft-bar');
 }

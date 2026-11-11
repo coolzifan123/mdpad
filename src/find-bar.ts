@@ -1,6 +1,7 @@
 // The find / replace bar (Ctrl+F, Ctrl+H). The searching itself is done by
 // the active editor's `Searcher` (see search.ts).
 
+import { t } from './i18n';
 import type { SearchOptions, Searcher } from './search';
 
 export interface FindBarElements {
@@ -136,7 +137,7 @@ export class FindBar {
     const count = searcher.search(this.ui.input.value, this.options);
     this.current = count > 0 ? searcher.firstAfterCursor() : -1;
     if (this.current >= 0) searcher.show(this.current);
-    this.showCount(count < 0 ? 'Invalid pattern' : undefined, count < 0);
+    this.showCount(count < 0 ? t('Invalid pattern') : undefined, count < 0);
   }
 
   private replace(): void {
@@ -152,7 +153,7 @@ export class FindBar {
     if (!searcher) return;
     const replaced = searcher.replaceAll(this.ui.replaceInput.value);
     this.current = -1;
-    this.showCount(replaced ? `Replaced ${replaced}` : undefined);
+    this.showCount(replaced ? t('Replaced {n}', { n: replaced }) : undefined);
   }
 
   private showCount(message?: string, problem = false): void {
@@ -161,8 +162,8 @@ export class FindBar {
     const { count: label, input } = this.ui;
     if (message) label.textContent = message;
     else if (!input.value) label.textContent = '';
-    else if (!count) label.textContent = 'No results';
-    else label.textContent = `${this.current + 1} of ${count}`;
+    else if (!count) label.textContent = t('No results');
+    else label.textContent = t('{current} of {count}', { current: this.current + 1, count });
     label.classList.toggle('none', problem || (Boolean(input.value) && !count && !message));
   }
 }

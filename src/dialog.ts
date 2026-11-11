@@ -1,6 +1,8 @@
 // A small in-app dialog that asks for one line of text (e.g. a link's URL).
 // window.prompt() isn't available inside the desktop app.
 
+import { t } from './i18n';
+
 export function askText(title: string, options: { value?: string; placeholder?: string } = {}): Promise<string | null> {
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
@@ -16,8 +18,8 @@ export function askText(title: string, options: { value?: string; placeholder?: 
     });
     const buttons = document.createElement('div');
     buttons.className = 'dialog-buttons';
-    const cancel = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Cancel' });
-    const ok = Object.assign(document.createElement('button'), { type: 'submit', textContent: 'OK', className: 'primary' });
+    const cancel = Object.assign(document.createElement('button'), { type: 'button', textContent: t('Cancel') });
+    const ok = Object.assign(document.createElement('button'), { type: 'submit', textContent: t('OK'), className: 'primary' });
     buttons.append(cancel, ok);
     label.append(input);
     dialog.append(label, buttons);

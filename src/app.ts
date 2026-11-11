@@ -23,9 +23,11 @@ import { writingModes } from './writing-modes';
 import { textStats, type TextStats } from './wordcount';
 import { autopairSettings } from './autopair';
 import { inlineSourceSettings } from './inline-source';
+import { count, t, type LanguageChoice } from './i18n';
 
 const APP_NAME = 'MdPad';
-const UNTITLED = 'Untitled.md';
+/** The name of a new document (in the interface's language). */
+const untitled = () => t('Untitled.md');
 const AUTO_SAVE_KEY = 'mdpad-autosave';
 /** The folder chosen with File > Open Folder. */
 const FOLDER_KEY = 'mdpad-folder';
@@ -76,7 +78,7 @@ export interface AppElements {
 export class App {
   private doc: DocumentState = {
     path: null,
-    name: UNTITLED,
+    name: untitled(),
     savedText: '',
     lineEnding: detectLineEnding(''),
     format: platform.DEFAULT_FORMAT,
@@ -165,7 +167,7 @@ export class App {
     hr: () => this.editor?.run('hr'),
     link: () => this.insertLink(),
     image: () => this.insertImage(),
-    about: () => platform.showMessage(`${APP_NAME} ${__APP_VERSION__}\n\nA free, open-source Markdown editor.`, `About ${APP_NAME}`),
+    about: () => platform.showMessage(`${APP_NAME} ${__APP_VERSION__}\n\n${t('A free, open-source Markdown editor.')}`, t('About MdPad')),
   };
 
   constructor(private readonly ui: AppElements) {
@@ -236,7 +238,7 @@ export class App {
         await this.load(await platform.readFile(initialPath));
         opened = true;
       } catch (error) {
-        await platform.showError(`Could not open ${initialPath}\n\n${error}`);
+        await platform.showError(`${t('Could not open {path}', { path: initialPath })}\n\n${error}`);
       }
     }
     if (!opened) await this.load(blankDocument());
@@ -311,7 +313,7 @@ export class App {
       await this.load(await platform.readFile(path));
     } catch (error) {
       removeRecentFile(path);
-      await platform.showError(`Could not open ${path}\n\n${error}`);
+      await platform.showError(`${t('Could not open {path}', { path })}\n\n${error}`);
     }
   }
 
@@ -399,7 +401,7 @@ export class App {
   private async paste(plain: boolean): Promise<void> {
     const text = await platform.readClipboardText();
     if (!text) {
-      await platform.showError(`Could not read the clipboard. Use ${plain ? 'Ctrl+Shift+V' : 'Ctrl+V'} instead.`);
+      await platform.showError(t('Could not read the clipboard. Use {keys} instead.', { keys: plain ? 'Ctrl+Shift+V' : 'Ctrl+V' }));
       return;
     }
     this.editor?.run(plain ? 'paste-plain' : 'paste', text);
@@ -452,49 +454,61 @@ export class App {
     };
     return showPreferences([
       {
-        title: 'Appearance',
+        title: t('Appearance'),
         fields: [
           {
             kind: 'select',
-            label: 'Theme',
+            // Takes effect when MdPad starts again; each language in its own words.
+            label: t('Language (after restarting MdPad)'),
+            value: this.prefs.language,
+            options: [
+              ['system', t('Same as Windows')],
+              ['en', 'English'],
+              ['zh-CN', '简体中文'],
+            ],
+            onChange: (value) => set({ language: value as LanguageChoice }),
+          },
+          {
+            kind: 'select',
+            label: t('Theme'),
             value: themeChoice(),
             options: [
-              ['system', 'Same as Windows'],
-              ['light', 'Light'],
-              ['dark', 'Dark'],
+              ['system', t('Same as Windows')],
+              ['light', t('Light')],
+              ['dark', t('Dark')],
             ],
             onChange: (value) => setThemeChoice(value as ThemeChoice),
           },
           {
             kind: 'select',
-            label: 'Custom theme',
+            label: t('Custom theme'),
             value: savedCustomTheme() ?? '',
-            options: [['', 'None'], ...this.themes.map((name): [string, string] => [name, name.replace(/\.css$/i, '')])],
+            options: [['', t('None')], ...this.themes.map((name): [string, string] => [name, name.replace(/\.css$/i, '')])],
             onChange: (value) => void applyCustomTheme(value || null, platform.readTheme),
           },
-          { kind: 'number', label: 'Font size', value: this.prefs.fontSize, min: 10, max: 32, unit: 'px', onChange: (fontSize) => set({ fontSize }) },
-          { kind: 'number', label: 'Text width', value: this.prefs.editorWidth, min: 500, max: 2400, step: 20, unit: 'px', onChange: (editorWidth) => set({ editorWidth }) },
+          { kind: 'number', label: t('Font size'), value: this.prefs.fontSize, min: 10, max: 32, unit: 'px', onChange: (fontSize) => set({ fontSize }) },
+          { kind: 'number', label: t('Text width'), value: this.prefs.editorWidth, min: 500, max: 2400, step: 20, unit: 'px', onChange: (editorWidth) => set({ editorWidth }) },
         ],
       },
       {
-        title: 'Editor',
+        title: t('Editor'),
         fields: [
-          { kind: 'checkbox', label: 'Check spelling', value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
-          { kind: 'checkbox', label: 'Type brackets and quotes in pairs', value: this.prefs.autoPair, onChange: (autoPair) => set({ autoPair }) },
-          { kind: 'checkbox', label: 'Type *, _ and ` in pairs', value: this.prefs.autoPairMarkdown, onChange: (autoPairMarkdown) => set({ autoPairMarkdown }) },
-          { kind: 'checkbox', label: 'Smart quotes (“curly” and it’s)', value: this.prefs.smartQuotes, onChange: (smartQuotes) => set({ smartQuotes }) },
-          { kind: 'checkbox', label: 'Line numbers in code blocks', value: this.prefs.codeLineNumbers, onChange: (codeLineNumbers) => set({ codeLineNumbers }) },
-          { kind: 'checkbox', label: 'Show Markdown symbols at the cursor', value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
-          { kind: 'checkbox', label: 'Focus mode', value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
-          { kind: 'checkbox', label: 'Typewriter mode', value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
+          { kind: 'checkbox', label: t('Check spelling'), value: this.prefs.spellcheck, onChange: (spellcheck) => set({ spellcheck }) },
+          { kind: 'checkbox', label: t('Type brackets and quotes in pairs'), value: this.prefs.autoPair, onChange: (autoPair) => set({ autoPair }) },
+          { kind: 'checkbox', label: t('Type *, _ and ` in pairs'), value: this.prefs.autoPairMarkdown, onChange: (autoPairMarkdown) => set({ autoPairMarkdown }) },
+          { kind: 'checkbox', label: t('Smart quotes (“curly” and it’s)'), value: this.prefs.smartQuotes, onChange: (smartQuotes) => set({ smartQuotes }) },
+          { kind: 'checkbox', label: t('Line numbers in code blocks'), value: this.prefs.codeLineNumbers, onChange: (codeLineNumbers) => set({ codeLineNumbers }) },
+          { kind: 'checkbox', label: t('Show Markdown symbols at the cursor'), value: this.view.symbols, onChange: (symbols) => this.setView({ symbols }) },
+          { kind: 'checkbox', label: t('Focus mode'), value: this.view.focus, onChange: (focus) => this.setView({ focus }) },
+          { kind: 'checkbox', label: t('Typewriter mode'), value: this.view.typewriter, onChange: (typewriter) => this.setView({ typewriter }) },
         ],
       },
       {
-        title: 'Files',
+        title: t('Files'),
         fields: [
           {
             kind: 'checkbox',
-            label: 'Save automatically',
+            label: t('Save automatically'),
             value: this.autoSave,
             onChange: (on) => {
               if (on !== this.autoSave) this.toggleAutoSave();
@@ -502,17 +516,17 @@ export class App {
           },
           {
             kind: 'text',
-            label: 'Folder for pasted images',
+            label: t('Folder for pasted images'),
             value: this.prefs.imageFolder,
             hint: 'assets',
             onChange: (imageFolder) => set({ imageFolder: imageFolder.replace(/^[\\/]+|[\\/]+$/g, '') || 'assets' }),
           },
           {
             kind: 'select',
-            label: 'Line endings for new files',
+            label: t('Line endings for new files'),
             value: this.prefs.newFileLineEnding,
             options: [
-              ['system', 'Same as Windows (CRLF)'],
+              ['system', t('Same as Windows (CRLF)')],
               ['crlf', 'CRLF'],
               ['lf', 'LF'],
             ],
@@ -521,9 +535,9 @@ export class App {
         ],
       },
       {
-        title: 'Updates',
+        title: t('Updates'),
         fields: [
-          { kind: 'checkbox', label: 'Check for new versions automatically', value: this.prefs.checkUpdates, onChange: (checkUpdates) => set({ checkUpdates }) },
+          { kind: 'checkbox', label: t('Check for new versions automatically'), value: this.prefs.checkUpdates, onChange: (checkUpdates) => set({ checkUpdates }) },
         ],
       },
     ]).then(() => this.editor?.focus());
@@ -539,11 +553,11 @@ export class App {
       update = await platform.checkForUpdate();
       rememberCheck();
     } catch (error) {
-      if (manual) await platform.showError(`Could not check for updates.\n\n${error}`);
+      if (manual) await platform.showError(`${t('Could not check for updates.')}\n\n${error}`);
       return;
     }
     if (!update) {
-      if (manual) await platform.showMessage(`You have the latest version of ${APP_NAME} (${__APP_VERSION__}).`, 'No Updates');
+      if (manual) await platform.showMessage(t('You have the latest version of MdPad ({version}).', { version: __APP_VERSION__ }), t('No Updates'));
       return;
     }
     // Let other commands run while the offer is showing.
@@ -665,7 +679,7 @@ export class App {
   }
 
   private async insertLink(): Promise<void> {
-    const href = await askText('Link address', { placeholder: 'https://' });
+    const href = await askText(t('Link address'), { placeholder: 'https://' });
     this.editor?.focus();
     if (href) this.editor?.run('link', href);
   }
@@ -847,16 +861,15 @@ export class App {
   private updateUi(): void {
     const { name, dirty } = this.doc;
     this.ui.docName.textContent = name;
-    this.ui.docName.title = this.doc.path ?? 'Not saved yet';
+    this.ui.docName.title = this.doc.path ?? t('Not saved yet');
     this.ui.dirtyMark.hidden = !dirty;
     // Show the encoding only when it's not plain UTF-8.
     const { encoding, bom } = this.doc.format;
-    const format = encoding !== 'UTF-8' ? encoding : bom ? 'UTF-8 with BOM' : '';
-    this.ui.statusMode.textContent = [this.mode === 'source' ? 'Source' : 'Live preview', format].filter(Boolean).join(' · ');
+    const format = encoding !== 'UTF-8' ? encoding : bom ? t('UTF-8 with BOM') : '';
+    this.ui.statusMode.textContent = [this.mode === 'source' ? t('Source') : t('Live preview'), format].filter(Boolean).join(' · ');
     void platform.setWindowTitle(`${dirty ? '● ' : ''}${name} - ${APP_NAME}`);
   }
 
-  /** "340 words · 1,912 characters", or "12 of 340 words" with a selection. */
   /** Count again after a change: at once, or in a big file once typing pauses. */
   private scheduleWordCount(markdown: string): void {
     window.clearTimeout(this.countTimer);
@@ -868,7 +881,8 @@ export class App {
   }
 
   /**
-   * The status bar's count. With `markdown`, the document changed and is
+   * The status bar's count: "340 words · 1,912 characters", or "12 of 340
+   * words" with a selection. With `markdown`, the document changed and is
    * counted again; without it (the selection moved), the last count is kept.
    */
   private updateWordCount(markdown?: string): void {
@@ -879,29 +893,28 @@ export class App {
     }
     const total = this.totalCount.stats;
     const selected = this.editor?.selectionMarkdown() ?? '';
-    const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
     this.ui.statusCount.textContent = selected
-      ? `${textStats(selected).words.toLocaleString()} of ${plural(total.words, 'word')}`
-      : `${plural(total.words, 'word')} · ${plural(total.characters, 'character')}`;
+      ? t('{selected} of {total}', { selected: textStats(selected).words.toLocaleString(), total: count(total.words, '1 word', '{n} words') })
+      : `${count(total.words, '1 word', '{n} words')} · ${count(total.characters, '1 character', '{n} characters')}`;
   }
 
   /** Clicking the word count: the details, for the selection too. */
   private async showWordCount(): Promise<void> {
     const describe = (title: string, markdown: string) => {
       const s = textStats(markdown);
-      const minutes = s.readingMinutes < 1 ? 'under a minute' : `about ${Math.round(s.readingMinutes)} min`;
+      const minutes = s.readingMinutes < 1 ? t('under a minute') : t('about {n} min', { n: Math.round(s.readingMinutes) });
       return [
         title,
-        `  Words: ${s.words.toLocaleString()}`,
-        `  Characters: ${s.characters.toLocaleString()} (${s.charactersWithSpaces.toLocaleString()} with spaces)`,
-        `  Paragraphs: ${s.paragraphs.toLocaleString()}`,
-        `  Reading time: ${minutes}`,
+        `  ${t('Words: {n}', { n: s.words.toLocaleString() })}`,
+        `  ${t('Characters: {n} ({spaces} with spaces)', { n: s.characters.toLocaleString(), spaces: s.charactersWithSpaces.toLocaleString() })}`,
+        `  ${t('Paragraphs: {n}', { n: s.paragraphs.toLocaleString() })}`,
+        `  ${t('Reading time: {time}', { time: minutes })}`,
       ].join('\n');
     };
     const selected = this.editor?.selectionMarkdown() ?? '';
-    const parts = [describe('Document', this.editor?.getMarkdown() ?? '')];
-    if (selected) parts.push(describe('Selection', selected));
-    await platform.showMessage(parts.join('\n\n'), 'Word Count');
+    const parts = [describe(t('Document'), this.editor?.getMarkdown() ?? '')];
+    if (selected) parts.push(describe(t('Selection'), selected));
+    await platform.showMessage(parts.join('\n\n'), t('Word Count'));
   }
 
   /** Edit > Copy as Markdown / Copy as HTML Code: the selection, or everything. */
@@ -931,7 +944,7 @@ function saveText(key: string, value: string): void {
 const isMarkdownName = (name: string) => /\.(md|markdown|mdown|mkd|txt)$/i.test(name);
 
 function blankDocument(): platform.OpenedFile {
-  return { path: null, name: UNTITLED, content: '', format: platform.DEFAULT_FORMAT, modified: 0 };
+  return { path: null, name: untitled(), content: '', format: platform.DEFAULT_FORMAT, modified: 0 };
 }
 
 function loadView(): ViewSettings {

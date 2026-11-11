@@ -48,6 +48,8 @@ import { imageHandler, useImageBlocks } from './image-blocks';
 import { createInlineSource } from './inline-source';
 import { mermaidPreview } from './mermaid';
 import { tableInput } from './table-input';
+import { codeTexts, crepeTexts, imageTexts } from './crepe-texts';
+import { t } from './i18n';
 import { pasteLink } from './paste-link';
 import { lineNumbers } from '@codemirror/view';
 import { tocPlugin, tocText } from './toc';
@@ -121,14 +123,17 @@ async function createWysiwygEditor(options: EditorOptions): Promise<MarkdownEdit
       [Crepe.Feature.ImageBlock]: true,
     },
     featureConfigs: {
-      [Crepe.Feature.Placeholder]: { text: 'Start writing…', mode: 'doc' },
+      [Crepe.Feature.Placeholder]: { text: t('Start writing…'), mode: 'doc' },
       // Math blocks show only the formula until you click them. Line
       // numbers are hidden unless turned on in Preferences (app.css).
-      [Crepe.Feature.CodeMirror]: { previewOnlyByDefault: true, extensions: [lineNumbers()] },
+      [Crepe.Feature.CodeMirror]: { previewOnlyByDefault: true, extensions: [lineNumbers()], ...codeTexts() },
       [Crepe.Feature.ImageBlock]: {
         proxyDomURL: options.resolveImage,
         onUpload: options.uploadImage,
+        ...imageTexts(),
       },
+      // The "/" menu, toolbar tips and link box in the interface's language.
+      ...crepeTexts(),
     },
   });
 

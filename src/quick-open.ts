@@ -1,5 +1,6 @@
 // Quick Open (Ctrl+P): type part of a file name, press Enter. Lists recent
 // files first, then every Markdown file in the sidebar's folder.
+import { t } from './i18n';
 
 export async function quickOpen(candidates: Promise<{ recent: string[]; folder: string | null; files: string[] }>): Promise<string | null> {
   const backdrop = document.createElement('div');
@@ -8,7 +9,7 @@ export async function quickOpen(candidates: Promise<{ recent: string[]; folder: 
   palette.className = 'palette';
   const input = Object.assign(document.createElement('input'), {
     type: 'text',
-    placeholder: 'Search files by name',
+    placeholder: t('Search files by name'),
     spellcheck: false,
   });
   const list = document.createElement('div');
@@ -17,7 +18,7 @@ export async function quickOpen(candidates: Promise<{ recent: string[]; folder: 
   backdrop.append(palette);
   document.body.append(backdrop);
   input.focus();
-  list.append(note('Loading…'));
+  list.append(note(t('Loading…')));
 
   const { recent, folder, files } = await candidates;
   // Recent files first, without duplicates.
@@ -33,7 +34,7 @@ export async function quickOpen(candidates: Promise<{ recent: string[]; folder: 
       selected = Math.min(selected, Math.max(0, shown.length - 1));
       list.replaceChildren();
       if (!shown.length) {
-        list.append(note(all.length ? 'No matching files' : folder ? 'No Markdown files in this folder' : 'Open a folder to search its files'));
+        list.append(note(all.length ? t('No matching files') : folder ? t('No Markdown files in this folder') : t('Open a folder to search its files')));
         return;
       }
       shown.forEach((path, i) => {

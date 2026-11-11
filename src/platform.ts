@@ -13,6 +13,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { ask, message, open, save } from '@tauri-apps/plugin-dialog';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { t } from './i18n';
 
 export const inTauri = isTauri();
 
@@ -243,34 +244,32 @@ export async function initialFilePath(): Promise<string | null> {
 
 /** The file was changed by another program while it had unsaved edits here. */
 export async function askReloadChangedFile(docName: string): Promise<boolean> {
-  const question = `"${docName}" was changed by another program.\n\nReload it and lose your changes here?`;
+  const question = t('"{name}" was changed by another program.\n\nReload it and lose your changes here?', { name: docName });
   if (!inTauri) return confirm(question);
-  return ask(question, { title: 'File changed', kind: 'warning', okLabel: 'Reload', cancelLabel: 'Keep Mine' });
+  return ask(question, { title: t('File changed'), kind: 'warning', okLabel: t('Reload'), cancelLabel: t('Keep Mine') });
 }
 
 export async function askUnsavedChanges(docName: string): Promise<UnsavedChoice> {
-  const question = `Do you want to save the changes to "${docName}"?`;
+  const question = t('Do you want to save the changes to "{name}"?', { name: docName });
   if (!inTauri) {
     // window.confirm has only two buttons: OK = discard, Cancel = keep editing.
-    return confirm(`${question}\n\nOK discards your changes.`) ? 'discard' : 'cancel';
+    return confirm(`${question}\n\n${t('OK discards your changes.')}`) ? 'discard' : 'cancel';
   }
-  const result = await message(question, {
-    title: 'Unsaved changes',
-    kind: 'warning',
-    buttons: { yes: 'Save', no: "Don't Save", cancel: 'Cancel' },
-  });
-  if (result === 'Save' || result === 'Yes') return 'save';
-  if (result === "Don't Save" || result === 'No') return 'discard';
+  // The answer is the label of the button clicked (or Yes / No).
+  const labels = { yes: t('Save'), no: t("Don't Save"), cancel: t('Cancel') };
+  const result = await message(question, { title: t('Unsaved changes'), kind: 'warning', buttons: labels });
+  if (result === labels.yes || result === 'Yes') return 'save';
+  if (result === labels.no || result === 'No') return 'discard';
   return 'cancel';
 }
 
 export async function showMessage(text: string, title: string): Promise<void> {
-  if (inTauri) await message(text, { title, kind: 'info' });
+  if (inTauri) await message(text, { title, kind: 'info', okLabel: t('OK') });
   else alert(text);
 }
 
 export async function showError(text: string): Promise<void> {
-  if (inTauri) await message(text, { title: 'Error', kind: 'error' });
+  if (inTauri) await message(text, { title: t('Error'), kind: 'error', okLabel: t('OK') });
   else alert(text);
 }
 
@@ -325,7 +324,7 @@ export async function pickImage(docPath: string | null, folder?: string): Promis
     const file = await browserPickImage();
     return file ? { src: await fileToDataUrl(file), alt: file.name.replace(/\.[^.]+$/, '') } : null;
   }
-  const path = await open({ multiple: false, directory: false, filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] });
+  const path = await open({ multiple: false, directory: false, filters: [{ name: t('Images'), extensions: IMAGE_EXTENSIONS }] });
   if (typeof path !== 'string') return null;
   const alt = baseName(path).replace(/\.[^.]+$/, '');
   if (docPath) return { src: await invoke<string>('import_image', { docPath, source: path, folder }), alt };

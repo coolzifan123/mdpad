@@ -2,6 +2,7 @@
 // Updates, and by itself once a day) and offers to install it.
 
 import { offerChoice } from './notice';
+import { t } from './i18n';
 
 const LAST_CHECK_KEY = 'mdpad-update-check';
 const DAY = 24 * 60 * 60 * 1000;
@@ -25,5 +26,5 @@ export function rememberCheck(): void {
 
 /** A bar at the bottom of the window. Resolves true for "Install". */
 export function offerUpdate(version: string): Promise<boolean> {
-  return offerChoice(`MdPad ${version} is available.`, 'Install and Restart', 'Later', 'update-bar');
+  return offerChoice(t('MdPad {version} is available.', { version }), t('Install and Restart'), t('Later'), 'update-bar');
 }

@@ -9,16 +9,16 @@
     <!-- The menus (File, Edit, ...) are added by src/menu.ts. -->
     <header class="menubar" id="menu-bar">
       <div class="doc-title">
-        <span id="doc-name">Untitled.md</span>
+        <span id="doc-name" data-i18n>Untitled.md</span>
         <span id="dirty-mark" title="Unsaved changes" hidden>●</span>
       </div>
     </header>
     <div class="workspace">
     <aside class="sidebar" id="sidebar" hidden>
       <div class="sidebar-tabs">
-        <button id="tab-files" title="Files (Ctrl+Shift+3)">Files</button>
-        <button id="tab-outline" title="Outline (Ctrl+Shift+1)">Outline</button>
-        <button id="tab-search" title="Search in folder (Ctrl+Shift+F)">Search</button>
+        <button id="tab-files" title="Files (Ctrl+Shift+3)" data-i18n>Files</button>
+        <button id="tab-outline" title="Outline (Ctrl+Shift+1)" data-i18n>Outline</button>
+        <button id="tab-search" title="Search in folder (Ctrl+Shift+F)" data-i18n>Search</button>
       </div>
       <div class="sidebar-panel" id="files-panel"></div>
       <div class="sidebar-panel" id="outline-panel"></div>
@@ -39,14 +39,14 @@
         </div>
         <div class="find-row" id="replace-row">
           <input id="replace-input" type="text" placeholder="Replace" spellcheck="false" aria-label="Replace" />
-          <button id="replace-one" title="Replace this match (Enter)">Replace</button>
-          <button id="replace-all" title="Replace every match">All</button>
+          <button id="replace-one" title="Replace this match (Enter)" data-i18n>Replace</button>
+          <button id="replace-all" title="Replace every match" data-i18n>All</button>
         </div>
       </div>
     </div>
     </div>
     <footer class="statusbar">
-      <span id="status-mode">Live preview</span>
+      <span id="status-mode" data-i18n>Live preview</span>
       <span id="status-count"></span>
     </footer>
     <script type="module" src="/src/main.ts"></script>

@@ -2,7 +2,11 @@
 // kept elsewhere, and the window that edits all of them. Changes apply as
 // soon as they're made.
 
+import { t, type LanguageChoice } from './i18n';
+
 export interface Preferences {
+  /** The interface's language (used when MdPad starts). */
+  language: LanguageChoice;
   /** Editor text size in px (headings scale with it). */
   fontSize: number;
   /** Widest the text column gets, in px. */
@@ -25,6 +29,7 @@ export interface Preferences {
 
 const KEY = 'mdpad-prefs';
 export const DEFAULT_PREFERENCES: Preferences = {
+  language: 'system',
   fontSize: 16,
   editorWidth: 900,
   spellcheck: true,
@@ -83,7 +88,7 @@ export function showPreferences(sections: Section[]): Promise<void> {
     const dialog = document.createElement('div');
     dialog.className = 'dialog preferences';
     dialog.setAttribute('role', 'dialog');
-    dialog.append(Object.assign(document.createElement('h2'), { textContent: 'Preferences' }));
+    dialog.append(Object.assign(document.createElement('h2'), { textContent: t('Preferences') }));
 
     for (const section of sections) {
       const box = document.createElement('section');
@@ -92,7 +97,7 @@ export function showPreferences(sections: Section[]): Promise<void> {
       dialog.append(box);
     }
 
-    const close = Object.assign(document.createElement('button'), { textContent: 'Close', className: 'primary' });
+    const close = Object.assign(document.createElement('button'), { textContent: t('Close'), className: 'primary' });
     const buttons = document.createElement('div');
     buttons.className = 'dialog-buttons';
     buttons.append(close);

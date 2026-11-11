@@ -1,6 +1,7 @@
 // The Files panel in the sidebar: the Markdown files in a folder. Folders
 // load when you open them.
 
+import { t } from './i18n';
 import * as platform from './platform';
 
 export class FileTree {
@@ -40,20 +41,20 @@ export class FileTree {
     header.className = 'tree-header';
     const title = Object.assign(document.createElement('span'), {
       className: 'tree-title',
-      textContent: this.root ? baseName(this.root) : 'No folder',
+      textContent: this.root ? baseName(this.root) : t('No folder'),
       title: this.root ?? '',
     });
-    const open = button('Open Folder…', 'Open a folder', () => this.onOpenFolder());
+    const open = button(t('Open Folder…'), t('Open a folder'), () => this.onOpenFolder());
     header.append(title, open);
-    if (this.root) header.append(button('↻', 'Refresh', () => void this.render()));
+    if (this.root) header.append(button('↻', t('Refresh'), () => void this.render()));
     this.panel.append(header);
 
     if (!platform.inTauri) {
-      this.panel.append(empty('Folders are available in the desktop app.'));
+      this.panel.append(empty(t('Folders are available in the desktop app.')));
       return;
     }
     if (!this.root) {
-      this.panel.append(empty('Open a folder to see its Markdown files here.'));
+      this.panel.append(empty(t('Open a folder to see its Markdown files here.')));
       return;
     }
     const list = document.createElement('div');
@@ -68,7 +69,7 @@ export class FileTree {
 
   private async renderFolder(path: string, container: HTMLElement, depth: number): Promise<void> {
     const entries = await platform.listDir(path);
-    if (!entries.length && depth === 0) container.append(empty('No Markdown files here.'));
+    if (!entries.length && depth === 0) container.append(empty(t('No Markdown files here.')));
     for (const entry of entries) {
       const row = document.createElement('div');
       row.className = `tree-row ${entry.isDir ? 'folder' : 'file'}`;
